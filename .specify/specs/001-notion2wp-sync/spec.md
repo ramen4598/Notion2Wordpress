@@ -1,6 +1,6 @@
 # Feature Specification: Notion to WordPress Sync
 
-**Feature Branch**: `1-notion2wp-sync`  
+**Feature Branch**: `001-notion2wp-sync`  
 **Created**: 2025-10-27  
 **Status**: Draft  
 **Input**: User description: "Notion에서 작성한 페이지를 Wordpress로 자동으로 업로드한다. 이미지 포함, 일정 주기 모니터링, 새 글은 draft로 업로드, Telegram 알림" 
