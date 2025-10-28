@@ -14,6 +14,8 @@ This feature implements automated synchronization of Notion pages to WordPress a
 **Language/Version**: TypeScript with Node.js (version NEEDS CLARIFICATION - recommend Node.js 18+ LTS)  
 **Primary Dependencies**: 
 - Notion SDK (@notionhq/client) for Notion API integration
+- Notion-to-MD (notion-to-md) for converting Notion blocks to Markdown
+- Marked (marked) for converting Markdown to HTML
 - WordPress REST API client library (NEEDS CLARIFICATION - e.g., wpapi, @wordpress/api-fetch)
 - Telegram Bot API client (NEEDS CLARIFICATION - e.g., node-telegram-bot-api, telegraf)
 - Scheduler library (NEEDS CLARIFICATION - e.g., node-cron, agenda)
@@ -51,6 +53,10 @@ This feature implements automated synchronization of Notion pages to WordPress a
 - Image file size limits (NEEDS CLARIFICATION - WordPress default: 2MB-10MB)
 - Exponential backoff retry: max 3 attempts with increasing delays
 - Rollback capability for failed sync operations
+- **Transport Security**: 
+	- HTTPS/TLS for Notion API (api.notion.com)
+	- HTTPS/TLS for Telegram Bot API (api.telegram.org)
+	- **HTTPS/TLS and HTTP for WordPress API** (support both for self-hosted WordPress during development)
 
 **Scale/Scope**: 
 - Single Notion database monitoring

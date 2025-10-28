@@ -59,29 +59,68 @@ This document consolidates research findings for all technical unknowns identifi
 
 ## 3. Telegram Bot API Client
 
+## 3. Content Converter Libraries
+
+### Decision
+**notion-to-md + marked** (Notion → Markdown → HTML)
+
+### Rationale
+- **notion-to-md**: Official-like support for Notion block conversion
+   - Handles all Notion block types (paragraphs, headings, lists, images, etc.)
+   - Built on @notionhq/client, maintained actively
+   - Provides intermediate Markdown for inspection/debugging
+   - Clean API: `pageToMarkdown()` + `toMarkdownString()`
+- **marked**: Industry-standard Markdown to HTML converter
+   - Fast, reliable, widely used (40k+ GitHub stars)
+   - Extensible via plugins/renderers
+   - TypeScript support via @types/marked
+   - WordPress-compatible HTML output (no custom tags)
+- **Combination benefits**:
+   - Transparent conversion pipeline (can log/validate Markdown intermediate)
+   - Markdown files can be backed up/reused
+   - HTML is WordPress REST API ready
+   - Easy to customize rendering if needed
+
+### Alternatives Considered
+- **Direct Notion API parsing**: Too much manual work, error-prone for complex blocks
+- **Custom HTML converter**: Reinventing the wheel, hard to maintain
+- **notion-md-crawler**: Less maintained, no TypeScript support
+
+### Implementation Notes
+- Install: `npm install notion-to-md @notionhq/client marked @types/marked`
+- Usage:
+   ```typescript
+   import { Client } from "@notionhq/client";
+   import { NotionToMarkdown } from "notion-to-md";
+   import { marked } from "marked";
+
+   const notion = new Client({ auth: process.env.NOTION_TOKEN });
+   const n2m = new NotionToMarkdown({ notionClient: notion });
+
+   async function convertPage(pageId: string) {
+      const mdBlocks = await n2m.pageToMarkdown(pageId);
+      const mdString = n2m.toMarkdownString(mdBlocks);
+      const html = marked.parse(mdString);
+      return html;
+   }
+   ```
+- Reference: 
+   - https://github.com/souvikinator/notion-to-md
+   - https://github.com/markedjs/marked
+
+---
+
+## 4. Telegram Bot API Client
+
 ### Decision
 **Telegraf v4.x**
 
 ### Rationale
-- Most popular Node.js Telegram bot framework (10k+ GitHub stars)
-- Excellent TypeScript support with built-in type definitions
-- Middleware architecture for extensibility
-- Active maintenance and comprehensive documentation
-- Handles rate limiting and reconnection automatically
-- Simple API for sending notifications
 
 ### Alternatives Considered
-- **node-telegram-bot-api**: Older, callback-based API (not promise/async-friendly)
-- **grammy**: Newer framework, smaller community but good TypeScript support
-- **Direct Telegram API calls**: Requires manual rate limit handling, error recovery
 
 ### Implementation Notes
-- Install: `npm install telegraf`
-- Use for sending success/failure notifications (no webhook/polling needed for one-way messages)
-- Configure bot token via environment variable
-- Reference: https://telegraf.js.org/
 
----
 
 ## 4. Scheduler Library
 
@@ -108,7 +147,7 @@ This document consolidates research findings for all technical unknowns identifi
 
 ---
 
-## 5. HTTP Client for Media Downloads
+## 6. HTTP Client for Media Downloads
 
 ### Decision
 **axios**
@@ -134,7 +173,7 @@ This document consolidates research findings for all technical unknowns identifi
 
 ---
 
-## 6. Testing Framework
+## 7. Testing Framework
 
 ### Decision
 **Vitest** for unit and integration tests
@@ -161,9 +200,9 @@ This document consolidates research findings for all technical unknowns identifi
 
 ---
 
-## 7. API Rate Limits
+## 8. API Rate Limits
 
-### 7.1 Notion API Rate Limits
+### 8.1 Notion API Rate Limits
 
 **Documented Limits**:
 - **3 requests per second** per integration token
@@ -177,7 +216,7 @@ This document consolidates research findings for all technical unknowns identifi
 
 **Reference**: https://developers.notion.com/reference/request-limits
 
-### 7.2 WordPress REST API Rate Limits
+### 8.2 WordPress REST API Rate Limits
 
 **Hosting-Dependent**:
 - **Self-hosted**: No default rate limit (depends on server config)
@@ -194,7 +233,7 @@ This document consolidates research findings for all technical unknowns identifi
 - Cache WordPress post IDs to minimize lookups
 - Use `_fields` parameter to reduce response payload
 
-### 7.3 Telegram Bot API Rate Limits
+### 8.3 Telegram Bot API Rate Limits
 
 **Documented Limits**:
 - **30 messages per second** (global limit for all bots)
@@ -213,9 +252,9 @@ This document consolidates research findings for all technical unknowns identifi
 
 ---
 
-## 8. API Permission Scopes (Minimum Privilege)
+## 9. API Permission Scopes (Minimum Privilege)
 
-### 8.1 Notion Integration Permissions
+### 9.1 Notion Integration Permissions
 
 **Required Capabilities**:
 - **Read content**: To fetch page blocks, properties
@@ -230,7 +269,7 @@ This document consolidates research findings for all technical unknowns identifi
 
 **Reference**: https://developers.notion.com/docs/authorization
 
-### 8.2 WordPress Application Passwords
+### 9.2 WordPress Application Passwords
 
 **Required Permissions**:
 - **Create posts** (`edit_posts` capability)
@@ -244,7 +283,7 @@ This document consolidates research findings for all technical unknowns identifi
 
 **Reference**: https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/
 
-### 8.3 Telegram Bot Token
+### 9.3 Telegram Bot Token
 
 **Required Permissions**:
 - **Send messages** (default for all bots)
@@ -256,6 +295,73 @@ This document consolidates research findings for all technical unknowns identifi
 - Store target chat ID: `TELEGRAM_CHAT_ID`
 
 **Reference**: https://core.telegram.org/bots/tutorial
+
+---
+
+## 10. WordPress API Transport Protocol
+
+### Decision
+**Support both HTTPS/TLS and HTTP**
+
+### Rationale
+- **Production/Hosted WordPress**: Requires HTTPS/TLS
+   - WordPress.com, WP Engine, Kinsta, etc. all enforce HTTPS
+   - Certificate validation via standard CA certificates
+   - Industry best practice for security
+- **Self-Hosted WordPress (Development/Internal)**: May use HTTP
+   - Local development environments (localhost, Docker)
+   - Internal network deployments without public certificates
+   - Testing environments
+- **Flexibility**: System should support both based on `WP_API_URL` scheme
+   - `https://example.com` → Use HTTPS with TLS verification
+   - `http://localhost:8080` → Use HTTP without TLS
+
+### Implementation Notes
+- Detect protocol from `WP_API_URL` environment variable
+   ```typescript
+   const wpUrl = new URL(process.env.WP_API_URL);
+   const isSecure = wpUrl.protocol === 'https:';
+   ```
+- For axios HTTP client:
+   - HTTPS: Default behavior (validates certificates)
+   - HTTP: No special configuration needed
+   - Optional: Allow self-signed certificates for internal HTTPS via environment flag
+      ```typescript
+      const httpsAgent = new https.Agent({
+         rejectUnauthorized: process.env.WP_VERIFY_SSL !== 'false'
+      });
+      ```
+- Log warning if using HTTP in non-development environments
+- Configuration example:
+   ```env
+   # Production
+   WP_API_URL=https://myblog.com
+  
+   # Development
+   WP_API_URL=http://localhost:8080
+  
+   # Self-signed cert (internal)
+   WP_API_URL=https://internal-wp.local
+   WP_VERIFY_SSL=false
+   ```
+
+### Security Considerations
+- HTTPS/TLS strongly recommended for production
+- HTTP acceptable only for:
+   - Local development (localhost)
+   - Internal networks with physical security
+   - Testing environments
+- Log warning when HTTP used: "Warning: WordPress API using HTTP (insecure). Recommended for development only."
+- Application Passwords transmitted in Authorization header (Base64 encoded, not encrypted) - **requires HTTPS in production**
+
+### Transport Summary
+- **Notion API**: HTTPS/TLS only (api.notion.com)
+- **Telegram Bot API**: HTTPS/TLS only (api.telegram.org)
+- **WordPress REST API**: HTTPS/TLS (production) or HTTP (development/self-hosted)
+
+**Reference**: 
+- https://developer.wordpress.org/rest-api/using-the-rest-api/authentication/
+- https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/
 
 ---
 

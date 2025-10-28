@@ -33,6 +33,7 @@ cd Notion2Wordpress
 
 ```bash
 npm install
+npm install notion-to-md @notionhq/client marked
 ```
 
 ### 3. Configure Environment Variables
@@ -51,9 +52,12 @@ NOTION_API_TOKEN=secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 NOTION_DATABASE_ID=7f2a3b4c5d6e7f8g9h0i1j2k3l4m5n6o
 
 # WordPress Configuration
-WP_API_URL=https://your-wordpress-site.com/wp-json
+WP_API_URL=https://your-wordpress-site.com/wp-json  # Production: HTTPS
+# WP_API_URL=http://localhost:8080/wp-json          # Dev/Self-hosted: HTTP allowed
 WP_USERNAME=your-wordpress-username
 WP_APP_PASSWORD=xxxx xxxx xxxx xxxx xxxx xxxx
+# Optional (self-signed internal certs):
+# WP_VERIFY_SSL=false
 
 # Telegram Configuration
 TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
@@ -398,6 +402,32 @@ sqlite3 ./data/sync.db "
 ---
 
 ## Maintenance
+
+### Content Conversion (Notion → Markdown → HTML)
+
+The service uses notion-to-md + marked to convert Notion blocks to WordPress-ready HTML. If you need a quick local test:
+
+```ts
+import { Client } from "@notionhq/client";
+import { NotionToMarkdown } from "notion-to-md";
+import { marked } from "marked";
+
+const notion = new Client({ auth: process.env.NOTION_API_TOKEN });
+const n2m = new NotionToMarkdown({ notionClient: notion });
+
+async function convertToHtml(pageId: string) {
+  const mdBlocks = await n2m.pageToMarkdown(pageId);
+  const mdString = n2m.toMarkdownString(mdBlocks);
+  const html = marked.parse(mdString);
+  return html;
+}
+```
+
+### Transport Security
+
+- Notion API and Telegram Bot API: HTTPS/TLS only
+- WordPress API: HTTPS/TLS (production) and HTTP (allowed for local/self-hosted dev)
+- If using a self-signed certificate internally, set `WP_VERIFY_SSL=false` to bypass strict verification (dev only)
 
 ### Backup Database
 

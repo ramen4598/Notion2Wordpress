@@ -1,18 +1,98 @@
 # API Contracts: Notion to WordPress Sync
 
-**Date**: 2025-10-27  
+**Date**: 2025-10-28  
 **Feature**: 001-notion2wp-sync  
-**Version**: 1.0
+**Version**: 2.0
 
 ## Overview
 
-This document defines the internal service contracts for the sync system. While the system doesn't expose HTTP APIs (it's a background daemon), these contracts document the interface between internal services and external APIs.
+This document defines the internal service contracts for the sync system based on the operation sequence defined in data-model.md. All contracts follow the creation/rollback order specified in the sequence diagrams.
 
 ---
 
-## 1. Notion Service Contract
+## 1. Sync Orchestrator Contract
 
-### 1.1 Query Pages with Status Filter
+### 1.1 Execute Sync Job
+
+**Purpose**: Orchestrate full sync workflow following the sequence diagram
+
+**Method**: `SyncOrchestrator.executeSyncJob()`
+
+**Input Parameters**:
+```typescript
+interface ExecuteSyncJobParams {
+  jobType: 'scheduled' | 'manual';
+}
+```
+
+**Output**:
+```typescript
+interface ExecuteSyncJobResponse {
+  jobId: number;                // SyncJob ID from database
+  status: 'completed' | 'failed';
+  pagesProcessed: number;
+  pagesSucceeded: number;
+  pagesFailed: number;
+  errors: SyncError[];
+}
+
+interface SyncError {
+  notionPageId: string;
+  pageTitle: string;
+  errorMessage: string;
+  retryCount: number;
+}
+```
+
+**Workflow (Success Path)**:
+```
+1. Create SyncJob (status=running)
+2. Query Notion pages (status=adding, incremental scan)
+3. FOR EACH page:
+   a. Create SyncJobItem (status=pending)
+   b. Get page blocks from Notion
+   c. Convert blocks to Markdown then HTML
+   d. Create WordPress Post (draft)
+   e. FOR EACH image in blocks:
+      - Create ImageAsset (status=pending)
+      - Download image from Notion
+      - Upload to WordPress Media
+      - Update ImageAsset (status=uploaded, wp_media_id, wp_media_url)
+   f. Create PagePostMap (notion_page_id, wp_post_id)
+   g. Update Notion page status to 'complete'
+   h. Update SyncJobItem (status=success)
+   i. Update SyncJob counters (pages_succeeded++)
+4. Update SyncJob (status=completed)
+5. Send Telegram notification (success)
+```
+
+**Workflow (Failure Path)**:
+```
+1-3. Same as success path until error occurs
+   ON ERROR at any step:
+   a. Update ImageAsset (status=failed) for failed images
+   b. Delete WordPress Media (foreach wp_media_id in ImageAsset)
+   c. Delete WordPress Post (if created)
+   d. Retry up to 3 times with exponential backoff (1s, 2s, 4s)
+   e. If max retries exceeded:
+      - Update Notion page status to 'error'
+      - Update SyncJobItem (status=failed, error_message)
+      - Update SyncJob counters (pages_failed++)
+4. Update SyncJob (status=failed)
+5. Send Telegram notification (failure with error summary)
+```
+
+**Error Handling**:
+- Catch all errors per page
+- Rollback WordPress resources (delete post/media via API)
+- Continue processing remaining pages
+- Report all errors in final notification
+
+---
+
+## 2. Notion Service Contract
+
+### 2.1 Query Pages with Status Filter
 
 **Purpose**: Retrieve pages from Notion database with incremental scanning
 
@@ -22,8 +102,8 @@ This document defines the internal service contracts for the sync system. While 
 ```typescript
 interface QueryPagesParams {
   databaseId: string;           // Notion database UUID
-  lastSyncTimestamp?: string;   // ISO 8601 timestamp for incremental scan
-  statusFilter?: 'adding';      // Filter by status property
+  lastSyncTimestamp?: string;   // ISO 8601 for incremental scan
+  statusFilter: 'adding';       // Only sync pages ready for upload
 }
 ```
 
@@ -47,15 +127,17 @@ interface NotionPage {
 
 **Error Conditions**:
 - `401 Unauthorized`: Invalid Notion API token
-- `404 Not Found`: Database ID doesn't exist or no access
-- `429 Too Many Requests`: Rate limit exceeded
+- `404 Not Found`: Database doesn't exist or no access
+- `429 Too Many Requests`: Rate limit exceeded (3 req/s)
 - `500 Internal Server Error`: Notion API error
 
 **Retry Policy**: 3 attempts with exponential backoff (1s, 2s, 4s)
 
+**Transport**: HTTPS/TLS (Notion API endpoint: https://api.notion.com)
+
 ---
 
-### 1.2 Retrieve Page Blocks
+### 2.2 Retrieve Page Blocks
 
 **Purpose**: Fetch content blocks (paragraphs, images, headings) from a page
 
@@ -76,12 +158,12 @@ interface GetPageBlocksResponse {
 
 interface Block {
   id: string;                   // Block UUID
-  type: string;                 // 'paragraph', 'heading_1', 'image', 'bulleted_list_item', etc.
-  [type]: {                     // Type-specific content
+  type: string;                 // 'paragraph', 'heading_1', 'image', etc.
+  [type]: {
     richText?: RichText[];      // For text blocks
     caption?: RichText[];       // For images
     url?: string;               // For external images
-    file?: { url: string };     // For uploaded images
+    file?: { url: string };     // For uploaded images (signed URL)
   };
 }
 
@@ -91,7 +173,9 @@ interface RichText {
   annotations: {
     bold: boolean;
     italic: boolean;
-    // ... other formatting
+    strikethrough: boolean;
+    underline: boolean;
+    code: boolean;
   };
 }
 ```
@@ -103,9 +187,13 @@ interface RichText {
 
 **Retry Policy**: 3 attempts with exponential backoff
 
+**Transport**: HTTPS/TLS
+
+**Note on Image URLs**: Signed URLs from `file.url` expire after ~1 hour. **Download immediately** after retrieving blocks.
+
 ---
 
-### 1.3 Update Page Status
+### 2.3 Update Page Status
 
 **Purpose**: Update page `status` property after sync completion/failure
 
@@ -135,11 +223,77 @@ interface UpdatePageStatusResponse {
 
 **Retry Policy**: 3 attempts with exponential backoff
 
+**Transport**: HTTPS/TLS
+
 ---
 
-## 2. WordPress Service Contract
+## 3. Content Converter Contract
 
-### 2.1 Create Draft Post
+### 3.1 Convert Notion Blocks to HTML
+
+**Purpose**: Convert Notion blocks to WordPress-compatible HTML via Markdown
+
+**Method**: `ContentConverter.convertToHTML()`
+
+**Input Parameters**:
+```typescript
+interface ConvertToHTMLParams {
+  blocks: Block[];              // Notion blocks from NotionService
+  notionClient: Client;         // For notion-to-md library
+}
+```
+
+**Output**:
+```typescript
+interface ConvertToHTMLResponse {
+  html: string;                 // WordPress-ready HTML
+  images: ImageReference[];     // Extracted image references
+}
+
+interface ImageReference {
+  blockId: string;              // Notion block ID
+  url: string;                  // Notion signed URL (temporary)
+  altText?: string;             // From caption
+}
+```
+
+**Libraries Used**:
+- **notion-to-md** (https://github.com/souvikinator/notion-to-md)
+  - Purpose: Convert Notion blocks to Markdown
+  - Installation: `npm install notion-to-md @notionhq/client`
+  
+- **marked** (https://github.com/markedjs/marked)
+  - Purpose: Convert Markdown to HTML
+  - Installation: `npm install marked`
+
+**Usage Example**:
+```typescript
+import { Client } from "@notionhq/client";
+import { NotionToMarkdown } from "notion-to-md";
+import { marked } from "marked";
+
+const notion = new Client({ auth: process.env.NOTION_TOKEN });
+const n2m = new NotionToMarkdown({ notionClient: notion });
+
+async function convertPage(pageId: string) {
+  const mdBlocks = await n2m.pageToMarkdown(pageId);
+  const mdString = n2m.toMarkdownString(mdBlocks);
+  const html = marked.parse(mdString);
+  return html;
+}
+```
+
+**Error Conditions**:
+- `ConversionError`: Unsupported block type (log warning, skip block)
+- `ParseError`: Invalid Markdown structure
+
+**Retry Policy**: No retry (pure transformation, deterministic)
+
+---
+
+## 4. WordPress Service Contract
+
+### 4.1 Create Draft Post
 
 **Purpose**: Create a new WordPress post in draft status
 
@@ -149,7 +303,7 @@ interface UpdatePageStatusResponse {
 ```typescript
 interface CreateDraftPostParams {
   title: string;
-  content: string;              // HTML content (converted from Notion blocks)
+  content: string;              // HTML from ContentConverter
   status: 'draft';              // Always draft for MVP
 }
 ```
@@ -158,24 +312,34 @@ interface CreateDraftPostParams {
 ```typescript
 interface CreateDraftPostResponse {
   id: number;                   // WordPress post ID
-  link: string;                 // Post permalink
+  link: string;                 // Post URL (preview link)
   date: string;                 // ISO 8601
+  modified: string;
   title: { rendered: string };
   content: { rendered: string };
 }
 ```
 
 **Error Conditions**:
-- `401 Unauthorized`: Invalid credentials
+- `401 Unauthorized`: Invalid credentials (Application Password)
 - `403 Forbidden`: Insufficient permissions (need `edit_posts`)
 - `400 Bad Request`: Invalid post data
 - `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: WordPress server error
 
 **Retry Policy**: 3 attempts with exponential backoff
 
+**Transport**: 
+- HTTPS/TLS for hosted WordPress (https://example.com)
+- **HTTP for self-hosted WordPress** (http://localhost:8080 during development)
+- Support both protocols via configuration
+
+**Authentication**: Application Password (WordPress 5.6+)
+- Header: `Authorization: Basic base64(username:app_password)`
+
 ---
 
-### 2.2 Upload Media
+### 4.2 Upload Media
 
 **Purpose**: Upload image to WordPress media library
 
@@ -184,10 +348,10 @@ interface CreateDraftPostResponse {
 **Input Parameters**:
 ```typescript
 interface UploadMediaParams {
-  fileBuffer: Buffer;           // Image binary data
-  fileName: string;             // Original filename (with collision-safe suffix)
-  mimeType: string;             // e.g., 'image/jpeg'
-  altText?: string;             // Accessibility alt text
+  fileBuffer: Buffer;           // Image binary data (from Notion download)
+  filename: string;             // Original filename or generated name
+  mimeType: string;             // e.g., 'image/jpeg', 'image/png'
+  altText?: string;             // Accessibility alt text (from Notion caption)
 }
 ```
 
@@ -195,8 +359,8 @@ interface UploadMediaParams {
 ```typescript
 interface UploadMediaResponse {
   id: number;                   // WordPress media ID
-  sourceUrl: string;            // Public URL of uploaded image
-  mimeType: string;
+  sourceUrl: string;            // Permanent media URL
+  title: { rendered: string };
   mediaType: 'image';
 }
 ```
@@ -204,15 +368,20 @@ interface UploadMediaResponse {
 **Error Conditions**:
 - `401 Unauthorized`: Invalid credentials
 - `403 Forbidden`: Insufficient permissions (need `upload_files`)
-- `413 Payload Too Large`: File exceeds WordPress upload limit
+- `413 Payload Too Large`: File exceeds WordPress upload limit (default: 2-10MB, configurable)
 - `415 Unsupported Media Type`: Invalid MIME type
 - `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: WordPress server error
 
 **Retry Policy**: 3 attempts with exponential backoff
 
+**Transport**: HTTPS/TLS or HTTP (self-hosted)
+
+**Request Format**: multipart/form-data
+
 ---
 
-### 2.3 Delete Post (Rollback)
+### 4.3 Delete Post (Rollback)
 
 **Purpose**: Delete WordPress post during error recovery
 
@@ -239,14 +408,16 @@ interface DeletePostResponse {
 
 **Error Conditions**:
 - `401 Unauthorized`: Invalid credentials
-- `404 Not Found`: Post doesn't exist
+- `404 Not Found`: Post doesn't exist (ignore in rollback)
 - `403 Forbidden`: Insufficient permissions
 
-**Retry Policy**: 1 attempt (rollback must be fast)
+**Retry Policy**: 1 attempt only (rollback must be fast, log failure)
+
+**Transport**: HTTPS/TLS or HTTP
 
 ---
 
-### 2.4 Delete Media (Rollback)
+### 4.4 Delete Media (Rollback)
 
 **Purpose**: Delete WordPress media during error recovery
 
@@ -273,16 +444,347 @@ interface DeleteMediaResponse {
 
 **Error Conditions**:
 - `401 Unauthorized`: Invalid credentials
-- `404 Not Found`: Media doesn't exist
+- `404 Not Found`: Media doesn't exist (ignore in rollback)
 - `403 Forbidden`: Insufficient permissions
 
-**Retry Policy**: 1 attempt
+**Retry Policy**: 1 attempt only
+
+**Transport**: HTTPS/TLS or HTTP
 
 ---
 
-## 3. Telegram Service Contract
+## 5. Image Downloader Contract
 
-### 3.1 Send Notification
+### 5.1 Download Image from Notion
+
+**Purpose**: Download image from Notion signed URL before expiration
+
+**Method**: `ImageDownloader.downloadImage()`
+
+**Input Parameters**:
+```typescript
+interface DownloadImageParams {
+  url: string;                  // Notion signed URL (expires in ~1 hour)
+  blockId: string;              // For reference in ImageAsset
+}
+```
+
+**Output**:
+```typescript
+interface DownloadImageResponse {
+  buffer: Buffer;               // Image binary data
+  mimeType: string;             // Detected MIME type
+  fileHash: string;             // SHA-256 hash (for deduplication)
+  filename: string;             // Extracted or generated filename
+}
+```
+
+**Error Conditions**:
+- `401 Unauthorized`: Signed URL expired (retry not possible, fail sync)
+- `404 Not Found`: Image no longer exists
+- `408 Request Timeout`: Download timed out
+- `500 Internal Server Error`: Notion CDN error
+
+**Retry Policy**: 3 attempts with exponential backoff (for non-401 errors)
+
+**Transport**: HTTPS/TLS (Notion CDN)
+
+**Implementation Notes**:
+- Use streaming to handle large images efficiently
+- Calculate SHA-256 hash during download (no need to re-read buffer)
+- Store hash in ImageAsset for deduplication check
+
+---
+
+## 6. Database Service Contract
+
+### 6.1 Create SyncJob
+
+**Method**: `DatabaseService.createSyncJob()`
+
+**Input**:
+```typescript
+interface CreateSyncJobParams {
+  jobType: 'scheduled' | 'manual';
+}
+```
+
+**Output**:
+```typescript
+interface CreateSyncJobResponse {
+  id: number;                   // SyncJob ID
+  startedAt: string;            // ISO 8601
+}
+```
+
+**SQL**:
+```sql
+INSERT INTO sync_jobs (job_type, status, started_at)
+VALUES (?, 'running', datetime('now'))
+RETURNING id, started_at;
+```
+
+---
+
+### 6.2 Create SyncJobItem
+
+**Method**: `DatabaseService.createSyncJobItem()`
+
+**Input**:
+```typescript
+interface CreateSyncJobItemParams {
+  syncJobId: number;
+  notionPageId: string;
+}
+```
+
+**Output**:
+```typescript
+interface CreateSyncJobItemResponse {
+  id: number;
+  createdAt: string;
+}
+```
+
+**SQL**:
+```sql
+INSERT INTO sync_job_items (sync_job_id, notion_page_id, status)
+VALUES (?, ?, 'pending')
+RETURNING id, created_at;
+```
+
+---
+
+### 6.3 Create ImageAsset
+
+**Method**: `DatabaseService.createImageAsset()`
+
+**Input**:
+```typescript
+interface CreateImageAssetParams {
+  syncJobItemId: number;
+  notionPageId: string;
+  notionBlockId: string;
+  notionUrl: string;            // Temporary signed URL
+  fileHash: string;             // SHA-256 hash
+}
+```
+
+**Output**:
+```typescript
+interface CreateImageAssetResponse {
+  id: number;
+  createdAt: string;
+}
+```
+
+**SQL**:
+```sql
+INSERT INTO image_assets (
+  sync_job_item_id, notion_page_id, notion_block_id,
+  notion_url, file_hash, status
+)
+VALUES (?, ?, ?, ?, ?, 'pending')
+RETURNING id, created_at;
+```
+
+---
+
+### 6.4 Update ImageAsset on Upload Success
+
+**Method**: `DatabaseService.updateImageAssetUploaded()`
+
+**Input**:
+```typescript
+interface UpdateImageAssetUploadedParams {
+  id: number;
+  wpMediaId: number;
+  wpMediaUrl: string;
+}
+```
+
+**SQL**:
+```sql
+UPDATE image_assets
+SET status = 'uploaded',
+    wp_media_id = ?,
+    wp_media_url = ?
+WHERE id = ?;
+```
+
+---
+
+### 6.5 Create PagePostMap
+
+**Method**: `DatabaseService.createPagePostMap()`
+
+**Input**:
+```typescript
+interface CreatePagePostMapParams {
+  notionPageId: string;
+  wpPostId: number;
+}
+```
+
+**Output**:
+```typescript
+interface CreatePagePostMapResponse {
+  id: number;
+  createdAt: string;
+}
+```
+
+**SQL**:
+```sql
+INSERT INTO page_post_map (notion_page_id, wp_post_id)
+VALUES (?, ?)
+RETURNING id, created_at;
+```
+
+**Note**: Only called on successful sync completion.
+
+---
+
+### 6.6 Update SyncJobItem on Success
+
+**Method**: `DatabaseService.updateSyncJobItemSuccess()`
+
+**Input**:
+```typescript
+interface UpdateSyncJobItemSuccessParams {
+  id: number;
+  wpPostId: number;
+}
+```
+
+**SQL**:
+```sql
+UPDATE sync_job_items
+SET status = 'success',
+    wp_post_id = ?,
+    updated_at = datetime('now')
+WHERE id = ?;
+```
+
+---
+
+### 6.7 Update SyncJobItem on Failure
+
+**Method**: `DatabaseService.updateSyncJobItemFailure()`
+
+**Input**:
+```typescript
+interface UpdateSyncJobItemFailureParams {
+  id: number;
+  errorMessage: string;
+  retryCount: number;
+}
+```
+
+**SQL**:
+```sql
+UPDATE sync_job_items
+SET status = 'failed',
+    error_message = ?,
+    retry_count = ?,
+    updated_at = datetime('now')
+WHERE id = ?;
+```
+
+---
+
+### 6.8 Update SyncJob on Completion
+
+**Method**: `DatabaseService.updateSyncJobCompleted()`
+
+**Input**:
+```typescript
+interface UpdateSyncJobCompletedParams {
+  id: number;
+  status: 'completed' | 'failed';
+  pagesProcessed: number;
+  pagesSucceeded: number;
+  pagesFailed: number;
+  lastSyncTimestamp?: string;   // Most recent notion page lastEditedTime
+}
+```
+
+**SQL**:
+```sql
+UPDATE sync_jobs
+SET status = ?,
+    completed_at = datetime('now'),
+    pages_processed = ?,
+    pages_succeeded = ?,
+    pages_failed = ?,
+    last_sync_timestamp = ?
+WHERE id = ?;
+```
+
+---
+
+### 6.9 Get Last Sync Timestamp
+
+**Method**: `DatabaseService.getLastSyncTimestamp()`
+
+**Output**:
+```typescript
+interface GetLastSyncTimestampResponse {
+  timestamp: string | null;     // ISO 8601 or null if first sync
+}
+```
+
+**SQL**:
+```sql
+SELECT last_sync_timestamp
+FROM sync_jobs
+WHERE status = 'completed'
+ORDER BY completed_at DESC
+LIMIT 1;
+```
+
+**Purpose**: Used for incremental scanning (filter Notion pages by `last_edited_time > last_sync_timestamp`)
+
+---
+
+### 6.10 Get ImageAssets for Rollback
+
+**Method**: `DatabaseService.getImageAssetsByJobItem()`
+
+**Input**:
+```typescript
+interface GetImageAssetsByJobItemParams {
+  syncJobItemId: number;
+}
+```
+
+**Output**:
+```typescript
+interface GetImageAssetsByJobItemResponse {
+  assets: ImageAssetRecord[];
+}
+
+interface ImageAssetRecord {
+  id: number;
+  wpMediaId: number | null;
+  status: 'pending' | 'uploaded' | 'failed';
+}
+```
+
+**SQL**:
+```sql
+SELECT id, wp_media_id, status
+FROM image_assets
+WHERE sync_job_item_id = ?;
+```
+
+**Purpose**: Used during rollback to delete uploaded WordPress media
+
+---
+
+## 7. Telegram Service Contract
+
+### 7.1 Send Notification
 
 **Purpose**: Send sync success/failure notification to Telegram channel
 
@@ -305,260 +807,189 @@ interface SendNotificationResponse {
 }
 ```
 
+**Message Format (Success)**:
+```
+✅ Sync Completed Successfully
+
+Pages processed: 5
+Pages succeeded: 5
+Pages failed: 0
+
+Job ID: 42
+Completed at: 2025-10-28T10:30:00Z
+```
+
+**Message Format (Failure)**:
+```
+❌ Sync Failed
+
+Pages processed: 5
+Pages succeeded: 3
+Pages failed: 2
+
+Failed pages:
+- "Article Title 1": API timeout after 3 retries
+- "Article Title 2": Image upload failed
+
+Job ID: 42
+To view detailed logs: docker logs notion2wp-sync
+```
+
 **Error Conditions**:
 - `401 Unauthorized`: Invalid bot token
 - `400 Bad Request`: Invalid chat ID or message format
-- `429 Too Many Requests`: Rate limit exceeded
+- `429 Too Many Requests`: Rate limit exceeded (30 msg/sec)
 
 **Retry Policy**: 3 attempts with exponential backoff
 
----
+**Transport**: HTTPS/TLS (Telegram Bot API: https://api.telegram.org)
 
-## 4. Sync Orchestrator Contract
-
-### 4.1 Execute Sync Job
-
-**Purpose**: Orchestrate full sync workflow
-
-**Method**: `SyncOrchestrator.executeSyncJob()`
-
-**Input Parameters**:
-```typescript
-interface ExecuteSyncJobParams {
-  jobType: 'scheduled' | 'manual';
-}
-```
-
-**Output**:
-```typescript
-interface ExecuteSyncJobResponse {
-  jobId: number;                // SyncJob ID from database
-  status: 'completed' | 'failed';
-  pagesProcessed: number;
-  pagesSucceeded: number;
-  pagesFailed: number;
-  errors: SyncError[];
-}
-
-interface SyncError {
-  notionPageId: string;
-  pageTitle: string;
-  error: string;
-  retryCount: number;
-}
-```
-
-**Workflow**:
-1. Create SyncJob record (status: `running`)
-2. Query Notion pages with `status=adding` (incremental scan)
-3. For each page:
-   - Retrieve page blocks
-   - Convert Notion blocks to HTML
-   - Download images from Notion
-   - Upload images to WordPress (sequential)
-   - Create WordPress draft post with image references
-   - Update Notion page status to `complete`
-   - Create PagePostMap record
-   - Create SyncJobItem record (status: `success`)
-4. On error (any step):
-   - Rollback: Delete WP post and media
-   - Update Notion page status to `error`
-   - Create SyncJobItem record (status: `failed`)
-   - Retry up to 3 times with exponential backoff
-5. Update SyncJob record (status: `completed` or `failed`)
-6. Send Telegram notification
-
-**Error Handling**:
-- Catch all errors per page
-- Rollback WordPress resources
-- Continue processing remaining pages
-- Report all errors in final notification
+**Library**: Telegraf v4.x
+- Installation: `npm install telegraf`
+- Usage: Simple send-only (no webhook/polling needed)
 
 ---
 
-## 5. Database Service Contract
+## 8. Error Handling & Rollback Strategy
 
-### 5.1 Create Page-Post Mapping
+### 8.1 Rollback Procedure
 
-**Method**: `DatabaseService.createPagePostMapping()`
+**Trigger**: Any error during sync process after WordPress resources created
 
-**Input**:
-```typescript
-interface CreatePagePostMappingParams {
-  notionPageId: string;
-  wpPostId: number;
-}
-```
+**Steps**:
+1. **Query ImageAssets** for current SyncJobItem
+2. **Delete WordPress Media** (for each `wp_media_id` where status='uploaded')
+   - Call `WordPressService.deleteMedia(mediaId, force=true)`
+   - Log failure if delete fails (continue rollback)
+3. **Update ImageAssets** to status='failed'
+4. **Delete WordPress Post** (if `wp_post_id` exists in SyncJobItem)
+   - Call `WordPressService.deletePost(postId, force=true)`
+   - Log failure if delete fails
+5. **Update Notion Page** status to 'error'
+6. **Update SyncJobItem** status to 'failed' with error message
+7. **Continue** processing next page
 
-**Output**:
-```typescript
-interface CreatePagePostMappingResponse {
-  id: number;                   // Mapping record ID
-  createdAt: string;
-}
-```
+### 8.2 Retry Strategy
 
-**Constraints**: Unique constraint on `notion_page_id` and `wp_post_id`
+**Retry Conditions**:
+- API errors: 429 (rate limit), 500-504 (server errors), timeouts
+- Network errors: Connection refused, DNS resolution failures
 
----
+**No Retry**:
+- 401 Unauthorized (invalid credentials - fail immediately)
+- 404 Not Found (resource doesn't exist)
+- 400 Bad Request (invalid data - fix required)
 
-### 5.2 Create Sync Job
+**Exponential Backoff**:
+- Attempt 1: Immediate
+- Attempt 2: Wait 1 second
+- Attempt 3: Wait 2 seconds
+- Attempt 4: Wait 4 seconds
+- Max: 3 retries (4 total attempts)
 
-**Method**: `DatabaseService.createSyncJob()`
-
-**Input**:
-```typescript
-interface CreateSyncJobParams {
-  jobType: 'scheduled' | 'manual';
-}
-```
-
-**Output**:
-```typescript
-interface CreateSyncJobResponse {
-  id: number;
-  startedAt: string;
-}
-```
+**Per-Page Retry**:
+- Each SyncJobItem tracks `retry_count`
+- Retry entire page sync (blocks + images + post creation)
+- After 3 retries, mark as failed and continue to next page
 
 ---
 
-### 5.3 Get Last Sync Timestamp
+## 9. Security & Authentication
 
-**Method**: `DatabaseService.getLastSyncTimestamp()`
+### 9.1 Notion API Authentication
 
-**Output**:
-```typescript
-interface GetLastSyncTimestampResponse {
-  timestamp: string | null;     // ISO 8601 or null if first sync
-}
-```
+**Method**: Integration Token (Internal Integration)
 
-**Purpose**: Used for incremental scanning (filter Notion pages by `last_edited_time`)
+**Configuration**:
+- Environment variable: `NOTION_API_TOKEN`
+- Header: `Authorization: Bearer <token>`
+- Transport: HTTPS only
 
----
-
-### 5.4 Create Image Asset
-
-**Method**: `DatabaseService.createImageAsset()`
-
-**Input**:
-```typescript
-interface CreateImageAssetParams {
-  notionPageId: string;
-  notionBlockId: string;
-  notionUrl: string;
-  wpMediaId?: number;
-  wpMediaUrl?: string;
-  fileHash: string;
-  status: 'pending' | 'uploaded' | 'failed';
-}
-```
-
-**Output**:
-```typescript
-interface CreateImageAssetResponse {
-  id: number;
-  createdAt: string;
-}
-```
+**Minimum Permissions**:
+- Read content (query database, read pages, read blocks)
+- Update content (update page properties for status field)
 
 ---
 
-## 6. Content Converter Contract
+### 9.2 WordPress API Authentication
 
-### 6.1 Convert Notion Blocks to HTML
+**Method**: Application Password (WordPress 5.6+)
 
-**Purpose**: Transform Notion block structure to WordPress-compatible HTML
+**Configuration**:
+- Environment variables:
+  - `WP_API_URL` (e.g., `https://example.com` or `http://localhost:8080`)
+  - `WP_USERNAME`
+  - `WP_APP_PASSWORD`
+- Header: `Authorization: Basic base64(username:app_password)`
+- Transport: HTTPS/TLS for production, HTTP allowed for self-hosted development
 
-**Method**: `ContentConverter.blocksToHTML()`
-
-**Input**:
-```typescript
-interface BlocksToHTMLParams {
-  blocks: Block[];              // Notion blocks from API
-  imageMap: Map<string, string>; // Block ID → WordPress media URL
-}
-```
-
-**Output**:
-```typescript
-interface BlocksToHTMLResponse {
-  html: string;                 // WordPress post content
-}
-```
-
-**Conversion Rules**:
-- `paragraph` → `<p>{text}</p>`
-- `heading_1` → `<h1>{text}</h1>`
-- `heading_2` → `<h2>{text}</h2>`
-- `heading_3` → `<h3>{text}</h3>`
-- `bulleted_list_item` → `<ul><li>{text}</li></ul>`
-- `numbered_list_item` → `<ol><li>{text}</li></ol>`
-- `image` → `<img src="{wp_url}" alt="{caption}" />`
-- `code` → `<pre><code>{text}</code></pre>`
-
-**Rich Text Formatting**:
-- `bold` → `<strong>{text}</strong>`
-- `italic` → `<em>{text}</em>`
-- `code` (inline) → `<code>{text}</code>`
-- `link` → `<a href="{url}">{text}</a>`
+**Minimum Permissions**:
+- Author or Editor role
+- Capabilities: `edit_posts`, `upload_files`
 
 ---
 
-## Error Response Format (Standard)
+### 9.3 Telegram Bot Authentication
 
-All services return errors in this format:
+**Method**: Bot Token
 
-```typescript
-interface ErrorResponse {
-  error: {
-    code: string;               // e.g., 'NOTION_AUTH_ERROR', 'WP_UPLOAD_FAILED'
-    message: string;            // Human-readable error
-    details?: any;              // Additional context
-    retryable: boolean;         // Whether retry is recommended
-  };
-}
-```
+**Configuration**:
+- Environment variables:
+  - `TELEGRAM_BOT_TOKEN`
+  - `TELEGRAM_CHAT_ID`
+- Transport: HTTPS only
 
-**Error Codes**:
-- `NOTION_AUTH_ERROR`: Notion API authentication failure
-- `NOTION_RATE_LIMIT`: Notion rate limit exceeded
-- `WP_AUTH_ERROR`: WordPress authentication failure
-- `WP_UPLOAD_FAILED`: Media upload failed
-- `WP_POST_CREATION_FAILED`: Post creation failed
-- `TELEGRAM_SEND_FAILED`: Notification send failed
-- `DATABASE_ERROR`: SQLite operation failed
-- `NETWORK_ERROR`: Network connectivity issue
-- `UNKNOWN_ERROR`: Unexpected error
+**Permissions**: Send messages only (no webhook/polling)
 
 ---
 
-## Retry Policy Summary
+## 10. Rate Limits & Throttling
 
-| Operation | Max Retries | Backoff | Notes |
-|-----------|-------------|---------|-------|
-| Notion API calls | 3 | Exponential (1s, 2s, 4s) | All read/write ops |
-| WordPress API calls | 3 | Exponential (1s, 2s, 4s) | Create post, upload media |
-| WordPress rollback | 1 | None | Fast failure on rollback |
-| Telegram notifications | 3 | Exponential (1s, 2s, 4s) | Non-blocking |
-| Database operations | 0 | None | Fail fast (local) |
+### 10.1 Notion API
 
----
+**Documented Limit**: 3 requests per second
 
-## Rate Limiting Strategy
-
-| API | Limit | Strategy |
-|-----|-------|----------|
-| Notion | 3 req/s | Client-side throttle (2.5 req/s) + queue |
-| WordPress | 300 req/hour | Client-side throttle (4 req/min) + queue |
-| Telegram | 30 msg/s | No throttle needed (low volume) |
+**Implementation**:
+- Client-side throttle: 2.5 req/s (safety margin)
+- Queue requests with delay between calls
+- Handle 429 responses: respect `Retry-After` header + exponential backoff
 
 ---
 
-## Future Contract Extensions
+### 10.2 WordPress API
 
-1. **Webhook endpoints**: Replace polling with event-driven sync
-2. **Batch operations**: Upload multiple media in single request (if WP supports)
-3. **Partial updates**: Sync only changed blocks (incremental content sync)
-4. **Bidirectional sync**: WordPress → Notion updates
+**Depends on Hosting**:
+- Self-hosted: No default limit (depends on server config)
+- WordPress.com: ~3,600 req/hour (~1 req/sec)
+- Managed hosting: 600-1,200 req/hour
+
+**Implementation**:
+- Conservative throttle: 5 req/min (0.083 req/s)
+- Handle 429 responses with exponential backoff
+- Use `_fields` parameter to reduce payload size
+
+---
+
+### 10.3 Telegram Bot API
+
+**Documented Limit**: 30 messages per second (global)
+
+**Implementation**:
+- MVP: 1 notification per sync job (unlikely to hit limit)
+- Queue notifications if needed in future
+
+---
+
+## Summary
+
+This contract document defines all service interfaces in the sync system, following the operation sequence from data-model.md. Key principles:
+
+1. **Creation Order**: SyncJob → SyncJobItem → ImageAsset → WPMedia → PagePostMap
+2. **Rollback Order**: Update ImageAsset → Delete WPMedia → Delete WPPost → Update Notion → Update SyncJobItem
+3. **Foreign Keys**: SyncJob ← SyncJobItem ← ImageAsset (cascade delete)
+4. **No FK**: PagePostMap (independent success record)
+5. **Transport**: HTTPS/TLS for all APIs, HTTP supported for self-hosted WordPress
+6. **Libraries**: notion-to-md + marked for content conversion
+7. **Authentication**: Integration token (Notion), Application Password (WordPress), Bot token (Telegram)
+
+All contracts include error handling, retry policies, and rollback procedures to ensure data consistency and system reliability.

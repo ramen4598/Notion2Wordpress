@@ -10,6 +10,151 @@ This document defines the core data entities, their relationships, validation ru
 
 ---
 
+## Sync Operation Sequence Diagrams
+
+### Success Scenario
+
+```
+Orchestrator    SyncJob    SyncJobItem    NotionAPI    ContentConverter    WordPressAPI    PagePostMap    ImageAsset    WPMedia
+    │               │           │              │                │                 │              │            │           │
+    ├──CREATE──────►│           │              │                │                 │              │            │           │
+    │          (status=running) │              │                │                 │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    ├──QUERY────────┼───────────┼─────────────►│                │                 │              │            │           │
+    │          (status=adding)  │              │                │                 │              │            │           │
+    │◄──PAGES────────────────────────────────┤                │                 │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    ├──FOR EACH PAGE────────────►              │                │                 │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    │               ├─CREATE────►              │                │                 │              │            │           │
+    │               │      (status=pending)    │                │                 │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    │               │           ├──GET BLOCKS──►                │                 │              │            │           │
+    │               │           │◄─────────────┤                │                 │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    │               │           ├──CONVERT─────┼───────────────►│                 │              │            │           │
+    │               │           │              │       (Notion blocks → Markdown → HTML)         │            │           │
+    │               │           │◄─────────────┼────────────────┤                 │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    │               │           ├──CREATE POST─┼────────────────┼────────────────►│              │            │           │
+    │               │           │◄─────────────┼────────────────┼─────────────────┤              │            │           │
+    │               │           │          (wp_post_id)         │                 │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    │               │           ├──DOWNLOAD IMG┼───────────────►│                 │              │            │           │
+    │               │           │◄─────────────┼────────────────┤                 │              │            │           │
+    │               │           │         (binary data)         │                 │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    │               │           ├──UPLOAD IMG──┼────────────────┼─────────────────┼─────────────►│            │           │
+    │               │           │◄─────────────┼────────────────┼─────────────────┼──────────────┤            │           │
+    │               │           │              │        (wp_media_id, wp_media_url)              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    │               │           ├──CREATE──────┼────────────────┼─────────────────┼──────────────┼───────────►│           │
+    │               │           │              │        (wp_media_id, wp_media_url, status=uploaded)           │           │
+    │               │           │              │                │                 │              │            │           │
+    │               │           ├──CREATE──────┼────────────────┼─────────────────┼──────────────┼───────────────────────►│
+    │               │           │              │   (notion_page_id, wp_post_id)   │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    │               │           ├──UPDATE STATUS───────────────►│                 │              │            │           │
+    │               │           │              │   (status=complete)              │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    │               │           ├──UPDATE──────►                │                 │              │            │           │
+    │               │           │        (status=success)       │                 │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    │               ├─UPDATE────┤              │                │                 │              │            │           │
+    │               │  (pages_succeeded++)     │                │                 │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    ├──END LOOP─────┤           │              │                │                 │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    ├──UPDATE───────►           │              │                │                 │              │            │           │
+    │      (status=completed)   │              │                │                 │              │            │           │
+    │               │           │              │                │                 │              │            │           │
+    ├──SEND NOTIFICATION────────┼──────────────┼────────────────┼─────────────────┼──────────────┼────────────┼───────────┤
+    │         (Telegram)        │              │                │                 │              │            │           │
+```
+
+### Failure & Rollback Scenario
+
+```
+Orchestrator    SyncJob    SyncJobItem    NotionAPI    WordPressAPI    ImageAsset    WPMedia    PagePostMap
+    │               │           │              │             │              │            │           │
+    ├──CREATE──────►│           │              │             │              │            │           │
+    │          (status=running) │              │             │              │            │           │
+    │               │           │              │             │              │            │           │
+    ├──FOR EACH PAGE────────────►              │             │              │            │           │
+    │               │           │              │             │              │            │           │
+    │               ├─CREATE────►              │             │              │            │           │
+    │               │      (status=pending)    │             │              │            │           │
+    │               │           │              │             │              │            │           │
+    │               │           ├──CREATE POST─┼────────────►│              │            │           │
+    │               │           │◄─────────────┼─────────────┤              │            │           │
+    │               │           │          (wp_post_id)      │              │            │           │
+    │               │           │              │             │              │            │           │
+    │               │           ├──UPLOAD IMG──┼─────────────┼─────────────►│            │           │
+    │               │           │◄─────────────┼─────────────┼──────────────┤            │           │
+    │               │           │              │     (wp_media_id)          │            │           │
+    │               │           │              │             │              │            │           │
+    │               │           ├──CREATE──────┼─────────────┼──────────────┼───────────►│           │
+    │               │           │              │   (wp_media_id, status=uploaded)        │           │
+    │               │           │              │             │              │            │           │
+    │               │           ├─ ❌ ERROR ───┼─────────────┼──────────────┤            │           │
+    │               │           │    (API failure / timeout) │              │            │           │
+    │               │           │              │             │              │            │           │
+    │               │           ├──ROLLBACK────►             │              │            │           │
+    │               │           │              │             │              │            │           │
+    │               │           ├──DELETE MEDIA────────────►│              │            │           │
+    │               │           │          (foreach wp_media_id in ImageAsset)           │           │
+    │               │           │              │             │              │            │           │
+    │               │           ├──UPDATE──────┼─────────────┼──────────────┼───────────►│           │
+    │               │           │              │        (status=failed)     │            │           │
+    │               │           │              │             │              │            │           │
+    │               │           ├──DELETE POST─┼────────────►│              │            │           │
+    │               │           │              │             │              │            │           │
+    │               │           ├──RETRY? (count < 3)       │              │            │           │
+    │               │           │      YES: retry with exponential backoff  │            │           │
+    │               │           │      NO: proceed to final failure         │            │           │
+    │               │           │              │             │              │            │           │
+    │               │           ├──UPDATE STATUS───────────►│              │            │           │
+    │               │           │              │   (status=error)           │            │           │
+    │               │           │              │             │              │            │           │
+    │               │           ├──UPDATE──────►             │              │            │           │
+    │               │           │        (status=failed, error_message)     │            │           │
+    │               │           │              │             │              │            │           │
+    │               ├─UPDATE────┤              │             │              │            │           │
+    │               │  (pages_failed++)        │             │              │            │           │
+    │               │           │              │             │              │            │           │
+    ├──UPDATE───────►           │              │             │              │            │           │
+    │      (status=failed)      │              │             │              │            │           │
+    │               │           │              │             │              │            │           │
+    ├──SEND NOTIFICATION────────┼──────────────┼─────────────┼──────────────┼────────────┼───────────┤
+    │    (Telegram - failure)   │              │             │              │            │           │
+```
+
+### Key Points from Sequence Diagrams
+
+**Creation Order (Success Path)**:
+1. `SyncJob` (status=running)
+2. `SyncJobItem` (status=pending)
+3. WordPress Post created → `wp_post_id`
+4. WordPress Media created → `wp_media_id`
+5. `ImageAsset` (status=uploaded, with wp_media_id)
+6. `PagePostMap` (with notion_page_id + wp_post_id)
+7. Notion Page status updated to `complete`
+8. `SyncJobItem` status updated to `success`
+9. `SyncJob` status updated to `completed`
+
+**Rollback Order (Failure Path)**:
+1. Update `ImageAsset` status to `failed`
+2. Delete WordPress Media (by wp_media_id from ImageAsset)
+3. Delete WordPress Post (by wp_post_id from SyncJobItem)
+4. Update Notion Page status to `error`
+5. Update `SyncJobItem` status to `failed` (with error_message)
+6. Update `SyncJob` pages_failed counter
+
+**Note**: `PagePostMap` is NOT created on failure, so no rollback needed. ImageAsset records are kept with `status=failed` for debugging.
+
+---
+
 ## Entity Diagram
 
 ```
@@ -17,27 +162,41 @@ This document defines the core data entities, their relationships, validation ru
 │   NotionPage    │────────▶│   SyncJob        │
 │  (External)     │  1:N    │   (Internal)     │
 └─────────────────┘         └──────────────────┘
-        │                            │
-        │ 1:1                        │ 1:N
-        ▼                            ▼
-┌─────────────────┐         ┌──────────────────┐
-│  PagePostMap    │         │  SyncJobItem     │
-│  (Internal)     │         │  (Internal)      │
-└─────────────────┘         └──────────────────┘
-        │
-        │ 1:1
-        ▼
+             │
+             │ 1:N
+             ▼
+          ┌──────────────────┐
+          │  SyncJobItem     │
+          │  (Internal)      │
+          └──────────────────┘
+             │
+             │ 1:N
+             ▼
+          ┌──────────────────┐
+          │   ImageAsset     │
+          │  (Internal)      │
+          └──────────────────┘
+             │
+             │ 1:1
+             ▼
+          ┌──────────────────┐
+          │    WPMedia       │
+          │  (External)      │
+          └──────────────────┘
+
+
+          ┌──────────────────┐
+          │  PagePostMap     │
+          │  (Internal)      │◄──── Created only on success
+          │                  │      (No FK relationships)
+          └──────────────────┘
+             │
+             │ references
+             ▼
 ┌─────────────────┐
 │    WPPost       │
 │  (External)     │
 └─────────────────┘
-        │
-        │ 1:N
-        ▼
-┌─────────────────┐         ┌──────────────────┐
-│   ImageAsset    │────────▶│  WPMedia         │
-│  (Internal)     │  1:1    │  (External)      │
-└─────────────────┘         └──────────────────┘
 ```
 
 ---
@@ -124,7 +283,7 @@ Represents a WordPress post (draft state).
 
 ### 3. PagePostMap (Internal - SQLite Table)
 
-Tracks the mapping between Notion pages and WordPress posts.
+Tracks the mapping between Notion pages and WordPress posts. **Only created on successful sync**.
 
 **Table**: `page_post_map`
 
@@ -134,10 +293,7 @@ CREATE TABLE page_post_map (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   notion_page_id TEXT NOT NULL UNIQUE,
   wp_post_id INTEGER NOT NULL UNIQUE,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  CONSTRAINT fk_sync_job FOREIGN KEY (notion_page_id) 
-    REFERENCES sync_jobs(notion_page_id) ON DELETE CASCADE
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX idx_notion_page_id ON page_post_map(notion_page_id);
@@ -149,17 +305,18 @@ CREATE INDEX idx_wp_post_id ON page_post_map(wp_post_id);
 - `notion_page_id`: Notion page UUID (unique)
 - `wp_post_id`: WordPress post ID (unique)
 - `created_at`: Timestamp when mapping was created
-- `updated_at`: Timestamp of last update
 
 **Validation Rules**:
 - `notion_page_id`: Must be unique, not null
 - `wp_post_id`: Must be unique, not null
-- Both timestamps must be valid ISO 8601
+- `created_at`: Must be valid ISO 8601
 
 **Business Rules**:
 - One Notion page maps to exactly one WordPress post (1:1)
+- **Created ONLY after successful sync** (WP post + images uploaded + Notion status updated)
 - Duplicate sync attempts (same `notion_page_id`) are prevented by unique constraint
 - Used to prevent duplicate uploads (future enhancement for idempotency)
+- **No foreign keys** - this is a final record of successful sync, should persist independently
 
 ---
 
@@ -271,7 +428,7 @@ CREATE INDEX idx_notion_page_id_item ON sync_job_items(notion_page_id);
 
 ### 6. ImageAsset (Internal - SQLite Table)
 
-Tracks images extracted from Notion pages and their WordPress media equivalents.
+Tracks images extracted from Notion pages and their WordPress media equivalents. **Created during sync process before WordPress upload**.
 
 **Table**: `image_assets`
 
@@ -279,6 +436,7 @@ Tracks images extracted from Notion pages and their WordPress media equivalents.
 ```sql
 CREATE TABLE image_assets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sync_job_item_id INTEGER NOT NULL,
   notion_page_id TEXT NOT NULL,
   notion_block_id TEXT NOT NULL,
   notion_url TEXT NOT NULL,
@@ -288,18 +446,20 @@ CREATE TABLE image_assets (
   status TEXT NOT NULL CHECK(status IN ('pending', 'uploaded', 'failed')),
   error_message TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (notion_page_id) REFERENCES page_post_map(notion_page_id) ON DELETE CASCADE
+  FOREIGN KEY (sync_job_item_id) REFERENCES sync_job_items(id) ON DELETE CASCADE
 );
 
+CREATE INDEX idx_sync_job_item_id ON image_assets(sync_job_item_id);
 CREATE INDEX idx_notion_block_id ON image_assets(notion_block_id);
 CREATE INDEX idx_file_hash ON image_assets(file_hash);
 ```
 
 **Fields**:
 - `id`: Auto-increment primary key
+- `sync_job_item_id`: Foreign key to SyncJobItem (which sync attempt this belongs to)
 - `notion_page_id`: Parent Notion page UUID
 - `notion_block_id`: Notion block ID (for image block)
-- `notion_url`: Original Notion image URL (signed, temporary)
+- `notion_url`: Original Notion image URL (signed, temporary, **stored for retry attempts only**)
 - `wp_media_id`: WordPress media library ID (null if upload failed)
 - `wp_media_url`: Permanent WordPress media URL
 - `file_hash`: SHA-256 hash of image content (for deduplication)
@@ -313,9 +473,12 @@ CREATE INDEX idx_file_hash ON image_assets(file_hash);
 - `wp_media_id`: Unique if not null
 
 **Business Rules**:
+- **Created immediately after downloading image from Notion** (during sync process)
 - File hash used to prevent duplicate uploads (same image, different block)
 - On rollback, delete WordPress media via REST API (`DELETE /wp/v2/media/{id}`)
-- Notion image URLs expire after ~1 hour (download immediately)
+- **Notion image URLs expire after ~1 hour**: URL stored for retry attempts within same sync job only
+- After sync job completes, `notion_url` becomes stale but kept for debugging
+- **Foreign key to sync_job_items ensures cascade delete** when job items are cleaned up
 
 ---
 
@@ -341,11 +504,44 @@ Represents uploaded media in WordPress media library.
 
 ## Relationships
 
-1. **NotionPage → PagePostMap**: 1:1 (one page maps to one post)
-2. **PagePostMap → WPPost**: 1:1 (one mapping points to one post)
-3. **SyncJob → SyncJobItem**: 1:N (one job has many item attempts)
-4. **NotionPage → ImageAsset**: 1:N (one page has many images)
-5. **ImageAsset → WPMedia**: 1:1 (one asset maps to one media item)
+### Database Foreign Key Relationships
+
+1. **SyncJob → SyncJobItem**: 1:N (FK: `sync_job_items.sync_job_id` → `sync_jobs.id`)
+  - Cascade delete: When SyncJob deleted, all related items deleted
+
+2. **SyncJobItem → ImageAsset**: 1:N (FK: `image_assets.sync_job_item_id` → `sync_job_items.id`)
+  - Cascade delete: When SyncJobItem deleted, all related image assets deleted
+
+### Logical Relationships (No FK)
+
+3. **NotionPage → PagePostMap**: 1:1 (identified by `notion_page_id`)
+  - PagePostMap created only on successful sync completion
+  - No FK to preserve historical mapping even if source deleted
+
+4. **PagePostMap → WPPost**: 1:1 (identified by `wp_post_id`)
+  - Logical reference only, no FK enforcement
+
+5. **ImageAsset → WPMedia**: 1:1 (identified by `wp_media_id`)
+  - Logical reference only, no FK enforcement
+  - WPMedia is external WordPress resource
+
+### Creation & Deletion Order
+
+**Creation Order (Success)**:
+1. SyncJob
+2. SyncJobItem
+3. ImageAsset (status=pending)
+4. WPMedia (external)
+5. ImageAsset updated (status=uploaded, wp_media_id set)
+6. WPPost (external)
+7. PagePostMap (final success marker)
+
+**Rollback Order (Failure)**:
+1. Update ImageAsset (status=failed)
+2. Delete WPMedia (external, via API)
+3. Delete WPPost (external, via API)
+4. SyncJobItem remains with status=failed
+5. PagePostMap NOT created
 
 ---
 
@@ -370,3 +566,11 @@ Represents uploaded media in WordPress media library.
 3. **Bidirectional Sync**: Track WordPress edits and update Notion
 4. **Versioning**: Track revision history for posts
 5. **Webhooks**: Replace polling with Notion/WordPress webhooks
+
+---
+
+## Mermaid Diagrams (External Files)
+
+- Sequence (Success): `specs/001-notion2wp-sync/diagrams/sequence-success.md`
+- Sequence (Failure & Rollback): `specs/001-notion2wp-sync/diagrams/sequence-failure.md`
+- ERD: `specs/001-notion2wp-sync/diagrams/erd.md`
