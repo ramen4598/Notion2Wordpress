@@ -37,7 +37,6 @@ npm install
 
 Installed versions:
 - `@notionhq/client`: 5.3.0
-- `@wordpress/api-fetch`: 7.33.0
 - `axios`: 1.13.0
 - `better-sqlite3`: 12.4.1
 - `dotenv`: 17.2.3

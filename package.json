@@ -17,7 +17,9 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write src/**/*.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "logs:sync": "sqlite3 ./data/sync.db \"SELECT * FROM sync_jobs ORDER BY started_at DESC LIMIT 5;\"",
+    "logs:failed": "sqlite3 ./data/sync.db \"SELECT * FROM sync_job_items WHERE status='failed';\""
   },
   "keywords": [
     "notion",
@@ -29,7 +31,6 @@
   "license": "MIT",
   "dependencies": {
     "@notionhq/client": "5.3.0",
-    "@wordpress/api-fetch": "7.33.0",
     "axios": "1.13.0",
     "better-sqlite3": "12.4.1",
     "dotenv": "17.2.3",

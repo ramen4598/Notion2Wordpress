@@ -9,13 +9,13 @@ export interface NotionPage {
   status: 'writing' | 'adding' | 'complete' | 'error';
   lastEditedTime: string;
   createdTime: string;
-  properties: Record<string, any>;
+  properties: Record<string, unknown>;
 }
 
 export interface NotionBlock {
   id: string;
   type: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface QueryPagesOptions {
@@ -36,37 +36,48 @@ class NotionService {
     this.client = new Client({ auth: config.notionApiToken });
   }
 
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+  }
+
+  private extractPlainText(arr: unknown): string {
+    if (!Array.isArray(arr)) return '';
+    return arr
+      .map((t) => (this.isRecord(t) && typeof t.plain_text === 'string' ? (t.plain_text as string) : ''))
+      .join('');
+  }
+
   async queryPages(options: QueryPagesOptions = {}): Promise<QueryPagesResponse> {
     const { lastSyncTimestamp, statusFilter = 'adding' } = options;
-
-    const filter: any = {
+    // Build filter (Notion API expects either a property filter or a compound filter)
+    // Use 'status' type instead of 'select' for Notion status properties
+    const statusFilterObj = {
       property: 'status',
-      select: {
-        equals: statusFilter,
-      },
-    };
+      status: { equals: statusFilter },
+    } as const;
 
-    // Add incremental scan filter if timestamp provided
-    if (lastSyncTimestamp) {
-      filter.and = [
-        filter,
-        {
-          timestamp: 'last_edited_time',
-          last_edited_time: {
-            after: lastSyncTimestamp,
-          },
-        },
-      ];
-    }
+    // If incremental timestamp provided, use compound AND filter
+    const filter: Record<string, unknown> = lastSyncTimestamp
+      ? {
+          and: [
+            statusFilterObj,
+            {
+              timestamp: 'last_edited_time',
+              last_edited_time: { after: lastSyncTimestamp },
+            },
+          ],
+        }
+      : statusFilterObj;
 
     try {
       const response = await retryWithBackoff(
-        async () => {
-          return await (this.client.databases as any).query({
-            database_id: config.notionDatabaseId,
-            filter,
-          });
-        },
+          async () => {
+            return await this.client.request<{ results: unknown[]; has_more: boolean; next_cursor: string | null }>({
+              path: `data_sources/${config.notionDatabaseId}/query`,
+              method: 'post',
+              body: { filter },
+            });
+          },
         {
           onRetry: (error, attempt) => {
             logger.warn(`Retrying Notion query (attempt ${attempt})`, { error: error.message });
@@ -74,7 +85,14 @@ class NotionService {
         }
       );
 
-      const pages: NotionPage[] = response.results.map((page: any) => ({
+      type NotionRawPage = {
+        id: string;
+        last_edited_time: string;
+        created_time: string;
+        properties: Record<string, unknown>;
+      };
+
+      const pages: NotionPage[] = (response.results as NotionRawPage[]).map((page) => ({
         id: page.id,
         title: this.extractTitle(page),
         status: this.extractStatus(page),
@@ -88,9 +106,10 @@ class NotionService {
         hasMore: response.has_more,
         nextCursor: response.next_cursor || undefined,
       };
-    } catch (error: any) {
-      logger.error('Failed to query Notion pages', error);
-      throw new Error(`Notion query failed: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to query Notion pages', { error: message });
+      throw new Error(`Notion query failed: ${message}`);
     }
   }
 
@@ -123,9 +142,10 @@ class NotionService {
 
       logger.info(`Retrieved ${blocks.length} blocks from page ${pageId}`);
       return blocks;
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error(`Failed to get blocks for page ${pageId}`, error);
-      throw new Error(`Failed to get page blocks: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get page blocks: ${message}`);
     }
   }
 
@@ -140,7 +160,7 @@ class NotionService {
             page_id: pageId,
             properties: {
               status: {
-                select: {
+                status: {
                   name: status,
                 },
               },
@@ -159,32 +179,43 @@ class NotionService {
       );
 
       logger.info(`Updated page ${pageId} status to: ${status}`);
+      type UpdatePageResponse = { last_edited_time: string };
       return {
         success: true,
-        updatedTime: (response as any).last_edited_time,
+        updatedTime: (response as UpdatePageResponse).last_edited_time,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error(`Failed to update page ${pageId} status`, error);
-      throw new Error(`Failed to update page status: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to update page status: ${message}`);
     }
   }
 
-  private extractTitle(page: any): string {
+  private extractTitle(page: { properties?: Record<string, unknown> } | unknown): string {
     // Notion title property can be in different formats
-    const titleProp = page.properties.title || page.properties.Title || page.properties.Name;
-    if (!titleProp) return 'Untitled';
-
-    if (titleProp.title && Array.isArray(titleProp.title) && titleProp.title.length > 0) {
-      return titleProp.title.map((t: any) => t.plain_text).join('');
-    }
-
+    if (!this.isRecord(page)) return 'Untitled';
+    const props = page.properties as Record<string, unknown> | undefined;
+    if (!props) return 'Untitled';
+    const candidate = (props['title'] ?? props['Title'] ?? props['Name']) as unknown;
+    if (!this.isRecord(candidate)) return 'Untitled';
+    const arr = candidate['title'];
+    const text = this.extractPlainText(arr);
+    if (text) return text;
     return 'Untitled';
   }
 
-  private extractStatus(page: any): 'writing' | 'adding' | 'complete' | 'error' {
-    const statusProp = page.properties.status || page.properties.Status;
-    if (!statusProp || !statusProp.select) return 'writing';
-    return statusProp.select.name as 'writing' | 'adding' | 'complete' | 'error';
+  private extractStatus(page: { properties?: Record<string, unknown> } | unknown): 'writing' | 'adding' | 'complete' | 'error' {
+    if (!this.isRecord(page)) return 'writing';
+    const props = page.properties as Record<string, unknown> | undefined;
+    if (!props) return 'writing';
+    const statusProp = (props['status'] ?? props['Status']) as unknown;
+    if (!this.isRecord(statusProp)) return 'writing';
+    const select = statusProp['select'];
+    if (!this.isRecord(select)) return 'writing';
+    const name = select['name'];
+    if (typeof name !== 'string') return 'writing';
+    if (name === 'writing' || name === 'adding' || name === 'complete' || name === 'error') return name;
+    return 'writing';
   }
 }
 
