@@ -6,10 +6,10 @@
 
 ## Phase 1: Setup
 - [X] T001 Create project structure and initialize Node.js/TypeScript project per plan.md
-- [ ] T002 Install dependencies: @notionhq/client, notion-to-md, marked, @wordpress/api-fetch, telegraf, node-cron, axios, vitest, dotenv, better-sqlite3, types for all
+- [X] T002 Install dependencies: @notionhq/client, notion-to-md, marked, @wordpress/api-fetch, telegraf, node-cron, axios, vitest, dotenv, better-sqlite3, types for all
 - [X] T003 Create .env.example and document required environment variables in README.md
 - [X] T004 [P] Create Dockerfile and docker-compose.yml for service containerization
-- [ ] T005 [P] Initialize SQLite database using config/schema.sql
+- [X] T005 [P] Initialize SQLite database using config/schema.sql
 - [X] T006 [P] Set up basic logging to stdout/stderr
 
 ## Phase 2: Foundational
@@ -48,36 +48,7 @@
 - [X] T031 [US4] Implement Telegram notification on sync success/failure
 - [X] T032 [P] [US4] Format notification message per contract (job stats, error summary)
 - [X] T033 [US4] Add error log reference in failure notification
-- [ ] T012 Implement image downloader with SHA-256 hashing and streaming (src/lib/imageDownloader.ts)
-- [ ] T013 [P] Implement retry/exponential backoff utility (src/lib/retry.ts)
-- [ ] T014 [P] Implement environment/config loader (src/config/index.ts)
-
-## Phase 3: User Story 1 (P1) - 자동 동기화 및 초안 업로드
-- [ ] T015 [US1] Implement SyncOrchestrator to run scheduled/manual sync jobs (src/orchestrator/syncOrchestrator.ts)
-- [ ] T016 [P] [US1] Implement incremental Notion page scan (status=adding, last sync timestamp)
-- [ ] T017 [P] [US1] Implement per-page sync job item creation and status tracking
-- [ ] T018 [P] [US1] Implement Notion → WordPress draft post creation flow
-- [ ] T019 [P] [US1] Implement Notion status update to complete/error after sync
-- [ ] T020 [US1] Implement error handling and rollback (delete WP post/media, update Notion status)
-- [ ] T021 [US1] Implement logging for all sync steps and errors
-- [ ] T022 [US1] Add CLI/manual trigger for sync (src/cli/syncManual.ts)
-
-## Phase 4: User Story 2 (P1) - 이미지 포함 및 자원 처리
-- [ ] T023 [US2] Implement image extraction from Notion blocks and download
-- [ ] T024 [P] [US2] Implement WordPress media upload and mapping to post content
-- [ ] T025 [P] [US2] Implement image filename collision prevention (hashing/unique naming)
-- [ ] T026 [US2] Implement rollback for failed image uploads (delete media, update status)
-- [ ] T027 [US2] Validate image inclusion in WordPress draft post
-
-## Phase 5: User Story 3 (P2) - 관리자 검토 및 게시
-- [ ] T028 [US3] Ensure all posts are created as draft only, no auto-publish
-- [ ] T029 [US3] Document manual review/publish workflow in README.md (WordPress admin dashboard)
-- [ ] T030 [US3] Add database query examples for debugging page-post mappings in README.md
-
-## Phase 6: User Story 4 (P2) - 알림
-- [ ] T031 [US4] Implement Telegram notification on sync success/failure
-- [ ] T032 [P] [US4] Format notification message per contract (job stats, error summary)
-- [ ] T033 [US4] Add error log reference in failure notification
+ 
 
 ## Final Phase: Polish & Cross-Cutting
 - [ ] T034 Add unit/integration tests for all services (Vitest, src/tests/)
