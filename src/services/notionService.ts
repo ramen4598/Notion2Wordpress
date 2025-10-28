@@ -115,33 +115,55 @@ class NotionService {
 
   async getPageBlocks(pageId: string): Promise<NotionBlock[]> {
     try {
-      const blocks: NotionBlock[] = [];
-      let cursor: string | undefined;
+      const allBlocks: NotionBlock[] = [];
 
-      do {
-        const response = await retryWithBackoff(
-          async () => {
-            return await this.client.blocks.children.list({
-              block_id: pageId,
-              start_cursor: cursor,
-            });
-          },
-          {
-            onRetry: (error, attempt) => {
-              logger.warn(`Retrying get page blocks (attempt ${attempt})`, {
-                pageId,
-                error: error.message,
+      // Helper function to recursively fetch blocks and their children
+      const fetchBlocksRecursively = async (blockId: string): Promise<NotionBlock[]> => {
+        const blocks: NotionBlock[] = [];
+        let cursor: string | undefined;
+
+        do {
+          const response = await retryWithBackoff(
+            async () => {
+              return await this.client.blocks.children.list({
+                block_id: blockId,
+                start_cursor: cursor,
               });
             },
+            {
+              onRetry: (error, attempt) => {
+                logger.warn(`Retrying get blocks (attempt ${attempt})`, {
+                  blockId,
+                  error: error.message,
+                });
+              },
+            }
+          );
+
+          const fetchedBlocks = response.results as NotionBlock[];
+          blocks.push(...fetchedBlocks);
+          cursor = response.has_more ? response.next_cursor || undefined : undefined;
+        } while (cursor);
+
+        // Recursively fetch children for blocks that have children
+        // Common parent blocks: column_list, column, toggle, synced_block, table, bulleted_list_item, etc.
+        for (const block of blocks) {
+          const hasChildren = (block as { has_children?: boolean }).has_children;
+          if (hasChildren) {
+            const children = await fetchBlocksRecursively(block.id);
+            // Attach children to the block for easier processing
+            (block as { children?: NotionBlock[] }).children = children;
           }
-        );
+        }
 
-        blocks.push(...(response.results as NotionBlock[]));
-        cursor = response.has_more ? response.next_cursor || undefined : undefined;
-      } while (cursor);
+        return blocks;
+      };
 
-      logger.info(`Retrieved ${blocks.length} blocks from page ${pageId}`);
-      return blocks;
+      const topLevelBlocks = await fetchBlocksRecursively(pageId);
+      allBlocks.push(...topLevelBlocks);
+
+      logger.info(`Retrieved ${allBlocks.length} blocks from page ${pageId} (including nested)`);
+      return allBlocks;
     } catch (error: unknown) {
       logger.error(`Failed to get blocks for page ${pageId}`, error);
       const message = error instanceof Error ? error.message : String(error);
