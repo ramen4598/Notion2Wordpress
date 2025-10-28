@@ -1,0 +1,366 @@
+# Research: Notion to WordPress Sync
+
+**Date**: 2025-10-27  
+**Feature**: 001-notion2wp-sync  
+**Status**: In Progress
+
+## Overview
+
+This document consolidates research findings for all technical unknowns identified during the Technical Context phase. Each decision includes rationale and alternatives considered.
+
+---
+
+## 1. Node.js Version Selection
+
+### Decision
+**Node.js 20.x LTS (Active LTS until April 2026)**
+
+### Rationale
+- Current Active LTS with long-term support
+- Native ESM support (important for modern TypeScript tooling)
+- Improved performance over Node.js 18
+- Better compatibility with latest TypeScript features
+- Security updates guaranteed through 2026
+
+### Alternatives Considered
+- **Node.js 18 LTS**: Still supported but older; 20.x provides better performance
+- **Node.js 21/22**: Not LTS versions, unsuitable for production stability requirements
+
+### Implementation Notes
+- Specify `"engines": { "node": ">=20.0.0" }` in package.json
+- Use Node.js 20 base image in Dockerfile (e.g., `node:20-alpine`)
+
+---
+
+## 2. WordPress REST API Client Library
+
+### Decision
+**@wordpress/api-fetch** with custom wrapper for type safety
+
+### Rationale
+- Official WordPress library, maintained by WordPress core team
+- Built-in middleware support for authentication, error handling
+- TypeScript-friendly with `@wordpress/api-fetch` type definitions available
+- Well-documented and actively maintained
+- Handles nonce/JWT authentication seamlessly
+
+### Alternatives Considered
+- **wpapi**: Third-party, less active maintenance (last update 2+ years ago)
+- **Direct fetch/axios calls**: Requires manual implementation of authentication, error handling, pagination - more maintenance burden
+- **wordpress-rest-api**: Minimal documentation, unclear maintenance status
+
+### Implementation Notes
+- Install: `npm install @wordpress/api-fetch`
+- Create TypeScript wrapper for type-safe post creation, media upload
+- Configure authentication middleware (Application Passwords or JWT)
+- Reference: https://developer.wordpress.org/block-editor/reference-guides/packages/packages-api-fetch/
+
+---
+
+## 3. Telegram Bot API Client
+
+### Decision
+**Telegraf v4.x**
+
+### Rationale
+- Most popular Node.js Telegram bot framework (10k+ GitHub stars)
+- Excellent TypeScript support with built-in type definitions
+- Middleware architecture for extensibility
+- Active maintenance and comprehensive documentation
+- Handles rate limiting and reconnection automatically
+- Simple API for sending notifications
+
+### Alternatives Considered
+- **node-telegram-bot-api**: Older, callback-based API (not promise/async-friendly)
+- **grammy**: Newer framework, smaller community but good TypeScript support
+- **Direct Telegram API calls**: Requires manual rate limit handling, error recovery
+
+### Implementation Notes
+- Install: `npm install telegraf`
+- Use for sending success/failure notifications (no webhook/polling needed for one-way messages)
+- Configure bot token via environment variable
+- Reference: https://telegraf.js.org/
+
+---
+
+## 4. Scheduler Library
+
+### Decision
+**node-cron**
+
+### Rationale
+- Simple, lightweight cron scheduler for Node.js
+- Familiar cron syntax for scheduling
+- No external dependencies (no MongoDB, Redis required)
+- Sufficient for single-instance scheduled sync tasks
+- Easy to combine with manual trigger via CLI or API endpoint
+
+### Alternatives Considered
+- **Agenda**: Requires MongoDB, overcomplicated for simple periodic tasks
+- **Bull**: Requires Redis, designed for queue-based job processing (overkill)
+- **node-schedule**: Similar to node-cron but less intuitive API
+
+### Implementation Notes
+- Install: `npm install node-cron @types/node-cron`
+- Define cron expression via environment variable (e.g., `SYNC_SCHEDULE="*/5 * * * *"` for every 5 minutes)
+- Allow manual trigger via separate CLI command or HTTP endpoint
+- Reference: https://github.com/node-cron/node-cron
+
+---
+
+## 5. HTTP Client for Media Downloads
+
+### Decision
+**axios**
+
+### Rationale
+- Industry standard HTTP client for Node.js
+- Built-in support for stream handling (important for large image downloads)
+- Promise-based API compatible with async/await
+- Excellent TypeScript support
+- Automatic request/response transformations
+- Interceptors for global error handling, retry logic
+
+### Alternatives Considered
+- **node-fetch**: Minimal API, requires additional setup for streams and retries
+- **undici**: Newer, faster, but less ecosystem maturity for complex use cases
+- **got**: Good alternative but larger bundle size, similar features to axios
+
+### Implementation Notes
+- Install: `npm install axios`
+- Use streaming for downloading images: `axios.get(url, { responseType: 'stream' })`
+- Implement retry logic with exponential backoff using axios interceptors or `axios-retry` package
+- Reference: https://axios-http.com/
+
+---
+
+## 6. Testing Framework
+
+### Decision
+**Vitest** for unit and integration tests
+
+### Rationale
+- Modern, fast test runner built on Vite
+- Native TypeScript and ESM support (no additional config needed)
+- Compatible with Jest API (easy migration if needed)
+- Fast watch mode for development
+- Built-in coverage reporting with c8/Istanbul
+- Better DX for TypeScript projects compared to Jest
+
+### Alternatives Considered
+- **Jest**: Industry standard but slower, requires additional TypeScript setup (ts-jest)
+- **Mocha + Chai**: Requires more boilerplate, not TypeScript-native
+- **AVA**: Good TypeScript support but smaller ecosystem
+
+### Implementation Notes
+- Install: `npm install -D vitest @vitest/ui c8`
+- Configure coverage threshold: 80% minimum (Constitution requirement)
+- Use `@vitest/spy` for mocking API calls
+- For E2E tests, consider additional library like Playwright (if needed)
+- Reference: https://vitest.dev/
+
+---
+
+## 7. API Rate Limits
+
+### 7.1 Notion API Rate Limits
+
+**Documented Limits**:
+- **3 requests per second** per integration token
+- **Burst allowance**: Brief spikes tolerated, but sustained rate must stay under 3 req/s
+- **429 response**: Rate limit exceeded, includes `Retry-After` header
+
+**Mitigation Strategy**:
+- Implement request queue with max 2.5 req/s throttle (safety margin)
+- Use exponential backoff on 429 responses
+- Batch operations where possible (e.g., pagination)
+
+**Reference**: https://developers.notion.com/reference/request-limits
+
+### 7.2 WordPress REST API Rate Limits
+
+**Hosting-Dependent**:
+- **Self-hosted**: No default rate limit (depends on server config)
+- **WordPress.com**: ~3,600 requests per hour per IP (varies by plan)
+- **Managed hosting (WP Engine, Kinsta)**: Typically 600-1,200 req/hour
+
+**Assumptions for MVP**:
+- Assume conservative limit: **300 requests per hour** (5 req/min)
+- Implement client-side throttle to stay under limit
+- Handle 429 responses with exponential backoff
+
+**Mitigation Strategy**:
+- Batch media uploads where possible
+- Cache WordPress post IDs to minimize lookups
+- Use `_fields` parameter to reduce response payload
+
+### 7.3 Telegram Bot API Rate Limits
+
+**Documented Limits**:
+- **30 messages per second** (global limit for all bots)
+- **20 messages per minute** to the same group/channel
+- **No limit** for 1-to-1 chats (practical limit: ~30/sec)
+
+**Assumptions for MVP**:
+- Send max 1 notification per sync job (success/failure)
+- Unlikely to hit limits with typical sync frequency (every 5 minutes)
+
+**Mitigation Strategy**:
+- Queue notifications if burst sending is needed
+- Group multiple sync results into single message if needed
+
+**Reference**: https://core.telegram.org/bots/faq#my-bot-is-hitting-limits-how-do-i-avoid-this
+
+---
+
+## 8. API Permission Scopes (Minimum Privilege)
+
+### 8.1 Notion Integration Permissions
+
+**Required Capabilities**:
+- **Read content**: To fetch page blocks, properties
+- **Update content**: To change `status` property (`adding` → `complete`/`error`)
+- **Read user information**: Optional (for audit logging)
+
+**Scope Configuration**:
+- Create internal integration in Notion workspace settings
+- Grant access to specific database(s) only
+- Enable "Read content" and "Update content" capabilities
+- Store integration token in environment variable: `NOTION_API_TOKEN`
+
+**Reference**: https://developers.notion.com/docs/authorization
+
+### 8.2 WordPress Application Passwords
+
+**Required Permissions**:
+- **Create posts** (`edit_posts` capability)
+- **Upload media** (`upload_files` capability)
+- **Edit draft posts** (implicit with `edit_posts`)
+
+**Setup**:
+- Create Application Password for dedicated sync user account
+- Assign "Author" or "Editor" role (both have required capabilities)
+- Store credentials: `WP_API_URL`, `WP_USERNAME`, `WP_APP_PASSWORD`
+
+**Reference**: https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/
+
+### 8.3 Telegram Bot Token
+
+**Required Permissions**:
+- **Send messages** (default for all bots)
+- No additional permissions needed for notification-only use case
+
+**Setup**:
+- Create bot via @BotFather
+- Store token: `TELEGRAM_BOT_TOKEN`
+- Store target chat ID: `TELEGRAM_CHAT_ID`
+
+**Reference**: https://core.telegram.org/bots/tutorial
+
+---
+
+## 9. Image Upload Optimization
+
+### Decision
+**Sequential upload with concurrent download** (max 3 concurrent downloads)
+
+### Rationale
+- **Download phase**: Fetch multiple images concurrently from Notion (3 concurrent)
+- **Upload phase**: Upload to WordPress sequentially to avoid rate limits
+- Balance between performance and API constraint compliance
+- Reduces risk of WordPress rate limit (429) errors
+
+### Alternatives Considered
+- **Full sequential**: Too slow for pages with many images
+- **Full concurrent**: High risk of rate limit violations
+- **Batch upload (10+ images)**: WordPress API doesn't support true batch media upload
+
+### Implementation Notes
+- Use `Promise.all()` with limit for concurrent downloads
+- Queue uploads sequentially with retry logic
+- Cache downloaded images temporarily in memory/disk (cleanup after sync)
+- Track upload progress for rollback on failure
+
+### Batch Size Strategy
+- **Download batch**: 3 images concurrently
+- **Upload batch**: 1 at a time (sequential)
+- **Retry budget**: 3 attempts per image (exponential backoff)
+
+---
+
+## 10. Notion Block Caching Strategy
+
+### Decision
+**No caching for MVP** (re-fetch on every sync)
+
+### Rationale
+- MVP prioritizes correctness over performance
+- Incremental scanning (last modified timestamp) already reduces redundant API calls
+- Caching adds complexity: invalidation, storage overhead, stale data risk
+- Expected sync frequency (every 5 minutes) and page count (<500) makes caching premature optimization
+
+### Alternatives Considered
+- **In-memory cache**: Lost on restart, adds memory overhead
+- **SQLite cache**: Requires invalidation logic, schema complexity
+- **ETag-based cache**: Notion API doesn't support ETags for blocks
+
+### Future Optimization Path
+If performance becomes an issue (>1,000 pages), consider:
+- Cache page blocks in SQLite with `last_edited_time` as cache key
+- Invalidate cache on Notion webhook (requires webhook setup)
+
+---
+
+## 11. Error Recovery & Rollback Strategy
+
+### Decision
+**Transactional rollback with WordPress resource cleanup**
+
+### Rationale
+- Ensure Notion status consistency: Failed sync → `status=error`
+- Prevent orphaned WordPress posts/media (resource leaks)
+- Align with Constitution data integrity principle
+
+### Rollback Workflow
+1. **Track created resources**: Store WordPress post ID, media IDs during sync
+2. **On error**:
+   - Delete WordPress post (if created)
+   - Delete uploaded media (if any)
+   - Set Notion `status=error`
+   - Log error details
+3. **Retry with backoff**: Max 3 attempts
+4. **Final failure**: Send Telegram notification with error summary
+
+### Implementation Notes
+- Use try-catch with cleanup in `finally` block
+- Store intermediate state in sync job record (SQLite)
+- WordPress REST API supports: `DELETE /wp/v2/posts/{id}`, `DELETE /wp/v2/media/{id}`
+
+---
+
+## Summary of Technology Stack
+
+| Component | Technology | Version |
+|-----------|-----------|---------|
+| Runtime | Node.js | 20.x LTS |
+| Language | TypeScript | Latest (5.x) |
+| Notion Client | @notionhq/client | Latest |
+| WordPress Client | @wordpress/api-fetch | Latest |
+| Telegram Client | Telegraf | 4.x |
+| Scheduler | node-cron | Latest |
+| HTTP Client | axios | Latest |
+| Database | SQLite (better-sqlite3) | Latest |
+| Testing | Vitest | Latest |
+| Code Quality | ESLint + Prettier | Latest |
+
+---
+
+## Open Questions for Implementation Phase
+
+1. **Notion database ID**: How will users specify which database to monitor? (Environment variable vs. config file)
+2. **WordPress category/tags**: Should sync include Notion page properties for categories/tags? (Out of scope for MVP?)
+3. **Image alt text**: Should extract from Notion image captions? (Enhancement for accessibility)
+4. **Sync schedule default**: Recommend 5-minute interval, but should be configurable?
+5. **Graceful shutdown**: How to handle sync interruption (SIGTERM/SIGINT) mid-sync?
+
+These questions will be addressed during Phase 1 design and implementation.
