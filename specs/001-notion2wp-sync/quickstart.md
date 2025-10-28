@@ -164,10 +164,11 @@ This creates `./data/sync.db` with the schema defined in `config/schema.sql`.
 # Run once (manual sync)
 npm run sync:manual
 
-# Start daemon (scheduled sync)
+# Start daemon (scheduled sync) 
+npm run build # requires build first
 npm run start
 
-# Development mode (with auto-restart)
+# Development mode (with auto-restart, no build needed)
 npm run dev
 ```
 

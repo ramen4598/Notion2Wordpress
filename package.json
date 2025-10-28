@@ -12,7 +12,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "sync:manual": "tsx src/cli/syncManual.ts",
-    "db:init": "node -e \"require('./dist/db/init.js').initDatabase()\"",
+    "db:init": "tsx -e \"import('./src/db/index.js').then(m => m.db.initialize())\"",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src/**/*.ts",
