@@ -46,6 +46,17 @@ Thumbs.db
 .cache/
 memo.md
 
+# SQLite database (persistent data)
+data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Test artifacts
+*.test.js
+*.spec.js
+
 # spec-kit
 .github/prompts/speckit.*
 .specify/scripts/*

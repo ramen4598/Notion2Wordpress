@@ -449,15 +449,23 @@ If performance becomes an issue (>1,000 pages), consider:
 | Component | Technology | Version |
 |-----------|-----------|---------|
 | Runtime | Node.js | 20.x LTS |
-| Language | TypeScript | Latest (5.x) |
-| Notion Client | @notionhq/client | Latest |
-| WordPress Client | @wordpress/api-fetch | Latest |
-| Telegram Client | Telegraf | 4.x |
-| Scheduler | node-cron | Latest |
-| HTTP Client | axios | Latest |
-| Database | SQLite (better-sqlite3) | Latest |
-| Testing | Vitest | Latest |
-| Code Quality | ESLint + Prettier | Latest |
+| Language | TypeScript | 5.9.3 |
+| Notion Client | @notionhq/client | 5.3.0 |
+| WordPress Client | @wordpress/api-fetch | 7.33.0 |
+| Telegram Client | Telegraf | 4.16.3 |
+| Scheduler | node-cron | 4.2.1 |
+| HTTP Client | axios | 1.13.0 |
+| Content Converter | notion-to-md | 3.1.9 |
+| Markdown Parser | marked | 16.4.1 |
+| Database | SQLite (better-sqlite3) | 12.4.1 |
+| Environment Config | dotenv | 17.2.3 |
+| Form Data | form-data | 4.0.4 |
+| Testing | Vitest | 4.0.4 |
+| Test Coverage | @vitest/coverage-v8 | 4.0.4 |
+| Code Quality | ESLint | 9.38.0 |
+| Code Formatter | Prettier | 3.6.2 |
+| TypeScript Config | @typescript-eslint/* | 8.46.2 |
+| Dev Runtime | tsx | 4.20.6 |
 
 ---
 

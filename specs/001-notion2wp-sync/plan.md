@@ -11,15 +11,18 @@ This feature implements automated synchronization of Notion pages to WordPress a
 
 ## Technical Context
 
-**Language/Version**: TypeScript with Node.js (version NEEDS CLARIFICATION - recommend Node.js 18+ LTS)  
+**Language/Version**: TypeScript 5.9.3 with Node.js 20.x LTS  
 **Primary Dependencies**: 
-- Notion SDK (@notionhq/client) for Notion API integration
-- Notion-to-MD (notion-to-md) for converting Notion blocks to Markdown
-- Marked (marked) for converting Markdown to HTML
-- WordPress REST API client library (NEEDS CLARIFICATION - e.g., wpapi, @wordpress/api-fetch)
-- Telegram Bot API client (NEEDS CLARIFICATION - e.g., node-telegram-bot-api, telegraf)
-- Scheduler library (NEEDS CLARIFICATION - e.g., node-cron, agenda)
-- HTTP client for media downloads (NEEDS CLARIFICATION - e.g., axios, node-fetch)
+- Notion SDK (@notionhq/client 5.3.0) for Notion API integration
+- Notion-to-MD (notion-to-md 3.1.9) for converting Notion blocks to Markdown
+- Marked (marked 16.4.1) for converting Markdown to HTML
+- WordPress REST API client (@wordpress/api-fetch 7.33.0)
+- Telegram Bot API client (telegraf 4.16.3)
+- Scheduler library (node-cron 4.2.1)
+- HTTP client for media downloads (axios 1.13.0)
+- Database (better-sqlite3 12.4.1)
+- Environment config (dotenv 17.2.3)
+- Form data handling (form-data 4.0.4)
 
 **Storage**: SQLite for:
 - Page-to-post mapping (NotionPageID → WordPressPostID)
@@ -28,10 +31,11 @@ This feature implements automated synchronization of Notion pages to WordPress a
 - Image asset tracking (original URL → WordPress media ID)
 
 **Testing**: 
-- Unit tests (NEEDS CLARIFICATION - recommend Jest or Vitest)
-- Integration tests for API interactions (NEEDS CLARIFICATION - test framework)
-- Contract tests for Notion/WordPress API responses (NEEDS CLARIFICATION)
-- E2E tests for sync workflow (NEEDS CLARIFICATION)
+- Unit tests (Vitest 4.0.4)
+- Integration tests for API interactions (Vitest 4.0.4)
+- Contract tests for Notion/WordPress API responses (Vitest 4.0.4)
+- E2E tests for sync workflow (Vitest 4.0.4)
+- Code coverage (@vitest/coverage-v8 4.0.4)
 
 **Target Platform**: Docker container (Linux-based) with:
 - Environment variables for API credentials (.env file via bind mount)
@@ -47,7 +51,7 @@ This feature implements automated synchronization of Notion pages to WordPress a
 - Notification delivery: Within 1 minute (SC-003)
 
 **Constraints**: 
-- Notion API rate limits (NEEDS CLARIFICATION - typical: 3 requests/second)
+- Notion API rate limits: 3 requests/second per integration
 - WordPress REST API rate limits (NEEDS CLARIFICATION - depends on hosting)
 - Telegram Bot API limits (NEEDS CLARIFICATION - typical: 30 messages/second)
 - Image file size limits (NEEDS CLARIFICATION - WordPress default: 2MB-10MB)

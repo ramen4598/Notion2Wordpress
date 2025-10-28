@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  notion2wp-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: notion2wp-sync
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Persistent SQLite database
+      - ./data:/app/data
+      # Mount .env as read-only (optional if using env_file)
+      - ./.env:/app/.env:ro
+    environment:
+      - NODE_ENV=production
+    # Optional: Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # Optional: Limit resources
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M

@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+lib/
+*.tsbuildinfo
+
+# Coverage
+coverage/
+
+# Generated files
+*.min.js
+*.bundle.js
+
+# Config files
+*.config.js
+
+# Database
+data/
+*.db

@@ -1,0 +1,63 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Environment files (mounted at runtime)
+.env
+.env.*
+
+# Build artifacts
+dist/
+build/
+*.tsbuildinfo
+
+# Documentation
+README.md
+docs/
+specs/
+.github/
+
+# Tests
+tests/
+*.test.ts
+*.spec.ts
+coverage/
+vitest.config.ts
+
+# Logs (will be generated in container)
+logs/
+*.log
+
+# macOS/Windows
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# SQLite database (mounted as volume)
+data/
+*.db
+*.db-journal
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Misc
+memo.md
+.cache/

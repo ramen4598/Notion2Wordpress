@@ -33,8 +33,23 @@ cd Notion2Wordpress
 
 ```bash
 npm install
-npm install notion-to-md @notionhq/client marked
 ```
+
+Installed versions:
+- `@notionhq/client`: 5.3.0
+- `@wordpress/api-fetch`: 7.33.0
+- `axios`: 1.13.0
+- `better-sqlite3`: 12.4.1
+- `dotenv`: 17.2.3
+- `form-data`: 4.0.4
+- `marked`: 16.4.1
+- `node-cron`: 4.2.1
+- `notion-to-md`: 3.1.9
+- `telegraf`: 4.16.3
+- `typescript`: 5.9.3
+- `vitest`: 4.0.4
+- `eslint`: 9.38.0
+- `prettier`: 3.6.2
 
 ### 3. Configure Environment Variables
 

@@ -1,0 +1,56 @@
+{
+  "name": "notion2wordpress",
+  "version": "1.0.0",
+  "description": "Automated synchronization of Notion pages to WordPress as draft posts",
+  "main": "dist/index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "sync:manual": "tsx src/cli/syncManual.ts",
+    "db:init": "node -e \"require('./dist/db/init.js').initDatabase()\"",
+    "test": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "notion",
+    "wordpress",
+    "sync",
+    "automation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@notionhq/client": "5.3.0",
+    "@wordpress/api-fetch": "7.33.0",
+    "axios": "1.13.0",
+    "better-sqlite3": "12.4.1",
+    "dotenv": "17.2.3",
+    "form-data": "4.0.4",
+    "marked": "16.4.1",
+    "node-cron": "4.2.1",
+    "notion-to-md": "3.1.9",
+    "telegraf": "4.16.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "24.9.1",
+    "@types/node-cron": "3.0.11",
+    "@typescript-eslint/eslint-plugin": "8.46.2",
+    "@typescript-eslint/parser": "8.46.2",
+    "@vitest/coverage-v8": "4.0.4",
+    "eslint": "9.38.0",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.6.2",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "4.0.4"
+  }
+}
