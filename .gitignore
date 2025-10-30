@@ -15,7 +15,7 @@ yarn.lock
 # TypeScript / build artifacts
 dist/
 build/
-lib/
+# lib/
 *.tsbuildinfo
 
 # Environment files
