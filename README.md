@@ -36,10 +36,6 @@
 - Notion API, Telegram Bot API: HTTPS/TLS
 - WordPress API: 운영은 HTTPS/TLS, 로컬/자체 호스팅 개발 환경에서는 HTTP 허용
 
-## 상태
-
-- 현재 작업 브랜치: `001-notion2wp-sync`
-
 ## 설치 및 실행
 
 ### 1. 의존성 설치
