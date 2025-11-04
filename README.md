@@ -54,7 +54,7 @@ cp .env.example .env
 
 필수 환경 변수:
 - `NOTION_API_TOKEN`: Notion integration token
-- `NOTION_DATABASE_ID`: 모니터링할 Notion 데이터베이스 ID
+- `NOTION_DATASOURCE_ID`: 모니터링할 Notion 데이터베이스 ID
 - `WP_API_URL`: WordPress REST API URL (예: https://your-site.com/wp-json)
 - `WP_USERNAME`: WordPress 사용자명
 - `WP_APP_PASSWORD`: WordPress Application Password

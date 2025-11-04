@@ -5,12 +5,12 @@ This document outlines the manual end-to-end scenario to validate the full sync 
 ## Prerequisites
 - Valid `.env` configured (see `specs/001-notion2wp-sync/quickstart.md`)
 - WordPress instance reachable with Application Passwords
-- Notion database with `status` select property
+- Notion datasource with `status` select property
 - Telegram bot token and chat id (optional for notifications)
 
 ## Steps
 1. Prepare Notion page
-   - Create or pick a page in the target database
+   - Create or pick a page in the target datasource
    - Set `status` = `adding`
    - Include some text content and 1-2 images (Notion image blocks)
 

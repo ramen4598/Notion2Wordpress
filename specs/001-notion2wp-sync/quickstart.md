@@ -14,7 +14,7 @@ This guide provides a quick reference for setting up and running the Notion-Word
 
 - **Node.js**: Version 20.x LTS or higher
 - **Docker**: Version 20.x or higher (for containerized deployment)
-- **Notion**: Integration token with access to target database
+- **Notion**: Integration token with access to target datasource
 - **WordPress**: Site with REST API enabled, Application Password credentials
 - **Telegram**: Bot token and chat ID for notifications
 
@@ -63,7 +63,7 @@ Edit `.env` with your credentials:
 ```env
 # Notion Configuration
 NOTION_API_TOKEN=secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-NOTION_DATABASE_ID=7f2a3b4c5d6e7f8g9h0i1j2k3l4m5n6o
+NOTION_DATASOURCE_ID=7f2a3b4c5d6e7f8g9h0i1j2k3l4m5n6o
 
 # WordPress Configuration
 WP_API_URL=https://your-wordpress-site.com/wp-json  # Production: HTTPS
@@ -99,18 +99,16 @@ LOG_LEVEL=info
    - ✅ Read content
    - ✅ Update content
 5. Copy the "Internal Integration Token" (starts with `secret_`)
-6. Share your database with the integration:
-   - Open database in Notion
+6. Share your datasource with the integration:
+   - Open datasource in Notion
    - Click "..." → "Add connections"
    - Select your integration
 
-### Notion Database ID
+### Notion Datasource ID
 
-From your Notion database URL:
-```
-https://www.notion.so/{workspace}/{database-id}?v={view-id}
-```
-Copy the `{database-id}` portion (32 characters, no hyphens).
+From your Notion datasource.
+
+Copy the datasource id (32 characters, no hyphens).
 
 ### WordPress Application Password
 
@@ -210,7 +208,7 @@ docker-compose logs -f
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `NOTION_API_TOKEN` | ✅ | - | Notion integration token |
-| `NOTION_DATABASE_ID` | ✅ | - | Target Notion database UUID |
+| `NOTION_DATASOURCE_ID` | ✅ | - | Target Notion datasource UUID |
 | `WP_API_URL` | ✅ | - | WordPress REST API base URL |
 | `WP_USERNAME` | ✅ | - | WordPress username |
 | `WP_APP_PASSWORD` | ✅ | - | WordPress Application Password |
@@ -243,7 +241,7 @@ SYNC_SCHEDULE="0 9 * * 1"
 
 ### Notion Workflow
 
-1. **Create page** in monitored Notion database
+1. **Create page** in monitored Notion datasource
 2. **Set status** to `"writing"` while drafting (default, sync ignores)
 3. **Change status** to `"adding"` when ready to sync
 4. **Wait for sync**: Next scheduled run (max 5 minutes)
@@ -289,11 +287,11 @@ docker exec notion2wp-sync npm run sync:manual
 
 #### 1. "Notion authentication failed"
 
-**Cause**: Invalid `NOTION_API_TOKEN` or database not shared with integration
+**Cause**: Invalid `NOTION_API_TOKEN` or datasource not shared with integration
 
 **Solution**:
 - Verify token format: `secret_...` (50 characters)
-- Check database connection in Notion (Add connections → Select integration)
+- Check datasource connection in Notion (Add connections → Select integration)
 
 ---
 
@@ -490,8 +488,8 @@ docker-compose build --no-cache
 
 ## FAQ
 
-**Q: Can I sync multiple Notion databases?**  
-A: Not in MVP. Future version will support multiple databases via config file.
+**Q: Can I sync multiple Notion datasources?**  
+A: Not in MVP. Future version will support multiple datasources via config file.
 
 **Q: Will it sync changes to already-published posts?**  
 A: No. MVP only creates new drafts. Bidirectional sync planned for v2.

@@ -263,7 +263,7 @@ This document consolidates research findings for all technical unknowns identifi
 
 **Scope Configuration**:
 - Create internal integration in Notion workspace settings
-- Grant access to specific database(s) only
+- Grant access to specific datasource(s) only
 - Enable "Read content" and "Update content" capabilities
 - Store integration token in environment variable: `NOTION_API_TOKEN`
 
@@ -471,7 +471,7 @@ If performance becomes an issue (>1,000 pages), consider:
 
 ## Open Questions for Implementation Phase
 
-1. **Notion database ID**: How will users specify which database to monitor? (Environment variable vs. config file)
+1. **Notion datasource ID**: How will users specify which datasource to monitor? (Environment variable vs. config file)
 2. **WordPress category/tags**: Should sync include Notion page properties for categories/tags? (Out of scope for MVP?)
 3. **Image alt text**: Should extract from Notion image captions? (Enhancement for accessibility)
 4. **Sync schedule default**: Recommend 5-minute interval, but should be configurable?

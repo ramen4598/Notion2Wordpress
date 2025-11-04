@@ -7,7 +7,7 @@
 
 ## Summary
 
-This feature implements automated synchronization of Notion pages to WordPress as draft posts. The system monitors a Notion database, uploads pages with `status=adding` to WordPress (including images), and sends Telegram notifications on completion. Key capabilities include scheduled/manual sync, incremental scanning, image handling with collision prevention, error recovery with rollback, and comprehensive logging.
+This feature implements automated synchronization of Notion pages to WordPress as draft posts. The system monitors a Notion datasource, uploads pages with `status=adding` to WordPress (including images), and sends Telegram notifications on completion. Key capabilities include scheduled/manual sync, incremental scanning, image handling with collision prevention, error recovery with rollback, and comprehensive logging.
 
 ## Technical Context
 
@@ -63,7 +63,7 @@ This feature implements automated synchronization of Notion pages to WordPress a
 	- **HTTPS/TLS and HTTP for WordPress API** (support both for self-hosted WordPress during development)
 
 **Scale/Scope**: 
-- Single Notion database monitoring
+- Single Notion datasource monitoring
 - MVP: 100-500 pages expected in initial deployment
 - Support for text + image content (no video/embed support in MVP)
 - Single WordPress site target

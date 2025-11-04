@@ -17,7 +17,7 @@ dotenv.config({ path: path.resolve(__dirname, DEFAULT_ENV_PATH) });
 export interface Config {
   // Notion
   notionApiToken: string;
-  notionDatabaseId: string;
+  notionDatasourceId: string;
 
   // WordPress
   wpApiUrl: string;
@@ -74,7 +74,7 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
 export const config: Config = {
   // Notion
   notionApiToken: getEnv('NOTION_API_TOKEN'),
-  notionDatabaseId: getEnv('NOTION_DATABASE_ID'),
+  notionDatasourceId: getEnv('NOTION_DATASOURCE_ID'),
 
   // WordPress
   wpApiUrl: getEnv('WP_API_URL'),

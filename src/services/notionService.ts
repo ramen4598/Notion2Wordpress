@@ -86,7 +86,7 @@ class NotionService {
       };
 
       return await this.client.request<NotionQueryResponse>({
-        path: `data_sources/${config.notionDatabaseId}/query`,
+        path: `data_sources/${config.notionDatasourceId}/query`,
         method: 'post',
         body: { filter },
       });

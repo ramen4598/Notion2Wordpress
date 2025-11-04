@@ -205,9 +205,9 @@ Orchestrator    SyncJob    SyncJobItem    NotionAPI    WordPressAPI    ImageAsse
 
 ### 1. NotionPage (External - Notion API)
 
-Represents a page in the monitored Notion database.
+Represents a page in the monitored Notion datasource.
 
-**Source**: Notion API (`databases.query`, `pages.retrieve`, `blocks.children.list`)
+**Source**: Notion API (`datasources.query`, `pages.retrieve`, `blocks.children.list`)
 
 **Fields**:
 - `id` (string, UUID): Notion page ID (e.g., `"7f2a3b4c-5d6e-7f8g-9h0i-1j2k3l4m5n6o"`)

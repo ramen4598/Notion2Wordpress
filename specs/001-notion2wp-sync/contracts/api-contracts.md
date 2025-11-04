@@ -94,14 +94,14 @@ interface SyncError {
 
 ### 2.1 Query Pages with Status Filter
 
-**Purpose**: Retrieve pages from Notion database with incremental scanning
+**Purpose**: Retrieve pages from Notion datasource with incremental scanning
 
 **Method**: `NotionService.queryPages()`
 
 **Input Parameters**:
 ```typescript
 interface QueryPagesParams {
-  databaseId: string;           // Notion database UUID
+  datasourceId: string;           // Notion datasouce UUID
   lastSyncTimestamp?: string;   // ISO 8601 for incremental scan
   statusFilter: 'adding';       // Only sync pages ready for upload
 }
@@ -127,7 +127,7 @@ interface NotionPage {
 
 **Error Conditions**:
 - `401 Unauthorized`: Invalid Notion API token
-- `404 Not Found`: Database doesn't exist or no access
+- `404 Not Found`: Datasource doesn't exist or no access
 - `429 Too Many Requests`: Rate limit exceeded (3 req/s)
 - `500 Internal Server Error`: Notion API error
 
@@ -906,7 +906,7 @@ To view detailed logs: docker logs notion2wp-sync
 - Transport: HTTPS only
 
 **Minimum Permissions**:
-- Read content (query database, read pages, read blocks)
+- Read content (query datasource, read pages, read blocks)
 - Update content (update page properties for status field)
 
 ---
