@@ -75,24 +75,29 @@ class NotionService {
         }
       : statusFilterObj;
 
+    // TODO: Follow official Notion docs. https://developers.notion.com/reference/query-a-data-source
+    // TODO: Add sorting option. sort by created_time, ascending.
+    // TODO: has_more, next_cursor 처리. Refer getPageBlocks method.
+    const fn = async () => {
+      type NotionQueryResponse = {
+        results: unknown[];
+        has_more: boolean;
+        next_cursor: string | null;
+      };
+
+      return await this.client.request<NotionQueryResponse>({
+        path: `data_sources/${config.notionDatabaseId}/query`,
+        method: 'post',
+        body: { filter },
+      });
+    };
+
+    const onRetryFn = (error: Error, attempt: number) => {
+      logger.warn(`Retrying Notion query (attempt ${attempt})`, { error: error.message });
+    };
+
     try {
-      const response = await retryWithBackoff(
-          // TODO: Follow official Notion docs. https://developers.notion.com/reference/query-a-data-source
-          // TODO: Add sorting option. sort by created_time, ascending.
-          async () => {
-            // TODO: has_more, next_cursor 처리. Refer getPageBlocks method.
-            return await this.client.request<{ results: unknown[]; has_more: boolean; next_cursor: string | null }>({
-              path: `data_sources/${config.notionDatabaseId}/query`,
-              method: 'post',
-              body: { filter },
-            });
-          },
-        {
-          onRetry: (error, attempt) => {
-            logger.warn(`Retrying Notion query (attempt ${attempt})`, { error: error.message });
-          },
-        }
-      );
+      const response = await retryWithBackoff( fn, { onRetry: onRetryFn });
 
       type NotionRawPage = {
         id: string;
