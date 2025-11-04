@@ -1,7 +1,7 @@
 // Description: Orchestrates the synchronization process between Notion, ContentConverter and WordPress.
 
 import { db } from '../db/index.js';
-import { notionService } from '../services/notionService.js';
+import { notionService, NotionPage } from '../services/notionService.js';
 import { wpService } from '../services/wpService.js';
 import { telegramService } from '../services/telegramService.js';
 import { contentConverter } from '../lib/contentConverter.js';
@@ -142,7 +142,7 @@ class SyncOrchestrator {
     }
   }
 
-  private async syncPage(jobId: number, page: any): Promise<void> {
+  private async syncPage(jobId: number, page: NotionPage): Promise<void> {
     let jobItemId: number | undefined;
     let wpPostId: number | undefined;
     const uploadedMediaIds: number[] = [];
