@@ -61,7 +61,6 @@ class TelegramService {
     const { jobId, jobType, status, pagesProcessed, pagesSucceeded, pagesFailed, errors } =
       options;
 
-    // TODO: 삼항연산자 사용하지 말고 깔끔하게 리팩토링
     const emoji = status === 'success' ? '✅' : '❌';
     const statusText = status === 'success' ? 'COMPLETED' : 'FAILED';
 

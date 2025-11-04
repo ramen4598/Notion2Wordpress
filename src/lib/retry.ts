@@ -72,6 +72,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// TODO: 사용되지 않는다면 제거 고려
 export function isRateLimitError(error: any): boolean {
   return (
     error?.status === 429 ||
@@ -80,7 +81,7 @@ export function isRateLimitError(error: any): boolean {
   );
 }
 
-// TODO: onRetry 콜백에서 사용하도록 변경할 것.
+// TODO: 사용되지 않는다면 제거 고려
 // This function can be used in retryWithBackoff's onRetry to determine if we should retry
 export function shouldRetry(error: any): boolean {
   // Retry on rate limits, network errors, and 5xx errors

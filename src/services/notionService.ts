@@ -41,16 +41,18 @@ class NotionService {
     this.client = new Client({ auth: config.notionApiToken });
   }
 
+  // TODO: 리팩토링 필요. utils로 이동 고려
   private isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
   }
 
-  // TODO : 삼항연산자 사용하지 말고 깔끔하게 리팩토링
   private extractPlainText(arr: unknown): string {
     if (!Array.isArray(arr)) return '';
-    return arr
-      .map((t) => (this.isRecord(t) && typeof t.plain_text === 'string' ? (t.plain_text as string) : ''))
-      .join('');
+    return arr.map((t) => {
+        if (!this.isRecord(t)) return '';
+        if (typeof t.plain_text !== 'string') return '';
+        return t.plain_text;
+      }).join('');
   }
 
   async queryPages(options: QueryPagesOptions = {}): Promise<QueryPagesResponse> {
@@ -61,19 +63,19 @@ class NotionService {
       status: { equals: statusFilter },
     } as const;
 
-    // TODO : 삼항연산자 사용하지 말고 깔끔하게 리팩토링
+    let filter: Record<string, unknown> = statusFilterObj;
     // If you've ever synced before, add the last edited time filter
-    const filter: Record<string, unknown> = lastSyncTimestamp
-      ? { // object named 'and' with an array of filter objects
-          and: [ // status filter AND last edited time filter 
-            statusFilterObj,
-            {
-              timestamp: 'last_edited_time',
-              last_edited_time: { after: lastSyncTimestamp },
-            },
-          ],
-        }
-      : statusFilterObj;
+    if (lastSyncTimestamp) {
+      filter = {
+        and: [
+          statusFilterObj,
+          {
+            timestamp: 'last_edited_time',
+            last_edited_time: { after: lastSyncTimestamp },
+          },
+        ],
+      };
+    }
 
     // TODO: Follow official Notion docs. https://developers.notion.com/reference/query-a-data-source
     // TODO: Add sorting option. sort by created_time, ascending.

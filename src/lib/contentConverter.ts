@@ -71,12 +71,13 @@ class ContentConverter {
       | { type: 'external'; external?: { url?: string }; caption?: NotionRichText[] }
       | { type: 'file'; file?: { url?: string }; caption?: NotionRichText[] };
 
-    // TODO: 리팩토링 필요. 작은 함수로 쪼개기
+    // TODO: 리팩토링 필요. utils로 이동 고려
     // User-defined type guards
     // Assure that v is a non-null object
     // return true then v is Record<string, unknown>
     const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
-  // TODO: 리팩토링 필요. 작은 함수로 쪼개기
+    // TODO: 리팩토링 필요. 작은 함수로 쪼개기
+    // User-defined type guards
     const isNotionImage = (v: unknown): v is NotionImage => {
       if (!isRecord(v) || typeof v.type !== 'string') return false;
       if (v.type === 'external') return true;
@@ -84,9 +85,13 @@ class ContentConverter {
       return false;
     };
     // TODO: 리팩토링 필요. 작은 함수로 쪼개기
-    // TODO: 삼항연산자 사용하지 말고 깔끔하게 리팩토링
-    const toAltText = (arr?: NotionRichText[]) =>
-      Array.isArray(arr) && arr.length > 0 ? arr.map((c) => c.plain_text || '').join('') : undefined;
+    const toAltText = (arr?: NotionRichText[]) => {
+      if (Array.isArray(arr) && arr.length > 0) {
+        return arr.map((c) => c.plain_text || '').join('');
+      } else {
+        return undefined;
+      }
+    };
 
     // TODO: 리팩토링 필요. 작은 함수로 쪼개기
     const extractFromBlock = (block: NotionBlock): void => {
@@ -100,15 +105,11 @@ class ContentConverter {
         if (url) images.push({ blockId: block.id, url, altText });
       }
 
-      // TODO: 삼항연산자 사용하지 말고 깔끔하게 리팩토링
       // Recursively extract from children blocks (for column_list, column, toggle, etc.)
-      const childrenKey = block.type === 'column_list' ? 'children' : 
-                          block.type === 'column' ? 'children' :
-                          block.type === 'toggle' ? 'children' :
-                          block.type === 'synced_block' ? 'children' :
-                          block.type === 'table' ? 'children' : null;
+      const typeList = ['column_list', 'column', 'toggle', 'synced_block', 'table'];
+      const ableToHaveChildren : boolean = typeList.includes(block.type);
 
-      if (childrenKey && isRecord(block)) {
+      if (ableToHaveChildren && isRecord(block)) {
         const children = (block as { children?: unknown }).children;
         if (Array.isArray(children)) {
           for (const child of children) {
