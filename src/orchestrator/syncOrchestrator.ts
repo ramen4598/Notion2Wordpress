@@ -188,6 +188,7 @@ class SyncOrchestrator {
 
           // Generate filename from hash to prevent collisions
           const extension = this.getExtensionFromContentType(contentType);
+          // TODO: 기존의 filename + hash 조합 방식으로 변경 고려 - url의 마지막 path에 있는 파일명 사용
           const filename = `${hash.substring(0, 16)}.${extension}`;
 
           // Upload to WordPress

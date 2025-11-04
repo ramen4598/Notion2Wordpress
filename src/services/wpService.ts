@@ -211,6 +211,7 @@ class WordPressService {
       return res.data;
     };
     
+    // TODO: 모든 isAxiosError 부분 찾아서 삭제
     const onRetryFn = (error: Error, attempt: number) => {
       const errorMsg = isAxiosError(error)
         ? `${error.message} (${error.response?.status || 'unknown'})`
@@ -224,7 +225,7 @@ class WordPressService {
     try {
       await retryWithBackoff(fn, { onRetry: onRetryFn });
       logger.info(`Deleted WordPress media: ${mediaId}`);
-    } catch (error: unknown) {
+    } catch (error: unknown) { // TODO: 모든 error: unknown 부분 찾아서 수정
       logger.warn(`Failed to delete WordPress media ${mediaId}`, error);
       let message: string;
       if (isAxiosError(error)) {
@@ -236,6 +237,7 @@ class WordPressService {
     }
   }
 
+  // TODO: not working
   async replaceImageUrls(html: string, imageMap: Map<string, string>): Promise<string> {
     let updatedHtml = html;
 
@@ -244,6 +246,9 @@ class WordPressService {
       const notionUrlEscaped = notionUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(notionUrlEscaped, 'g');
       updatedHtml = updatedHtml.replace(regex, wpUrl);
+      // show diff
+      const diff = updatedHtml.split('\n').filter((line, index) => line !== html.split('\n')[index]);
+      logger.info(`Replaced image URL in HTML`, { notionUrl, wpUrl, diff });
     }
 
     return updatedHtml;
