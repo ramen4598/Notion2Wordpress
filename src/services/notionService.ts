@@ -5,6 +5,7 @@ import { Client } from '@notionhq/client';
 import { config } from '../config/index.js';
 import { logger } from '../lib/logger.js';
 import { retryWithBackoff } from '../lib/retry.js';
+import { isRecord } from '../lib/utils.js';
 
 export interface NotionPage {
   id: string;
@@ -41,15 +42,10 @@ class NotionService {
     this.client = new Client({ auth: config.notionApiToken });
   }
 
-  // TODO: 리팩토링 필요. utils로 이동 고려
-  private isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-  }
-
   private extractPlainText(arr: unknown): string {
     if (!Array.isArray(arr)) return '';
     return arr.map((t) => {
-        if (!this.isRecord(t)) return '';
+        if (!isRecord(t)) return '';
         if (typeof t.plain_text !== 'string') return '';
         return t.plain_text;
       }).join('');
@@ -226,11 +222,11 @@ class NotionService {
 
   private extractTitle(page: { properties?: Record<string, unknown> } | unknown): string {
     // Notion title property can be in different formats
-    if (!this.isRecord(page)) return 'Untitled';
+    if (!isRecord(page)) return 'Untitled';
     const props = page.properties as Record<string, unknown> | undefined;
     if (!props) return 'Untitled';
     const candidate = (props['title'] ?? props['Title'] ?? props['Name']) as unknown;
-    if (!this.isRecord(candidate)) return 'Untitled';
+    if (!isRecord(candidate)) return 'Untitled';
       
     // Notion title property has 'title' array according to API spec
     // https://developers.notion.com/reference/property-object#title
@@ -242,13 +238,13 @@ class NotionService {
   }
 
   private extractStatus(page: { properties?: Record<string, unknown> } | unknown): 'writing' | 'adding' | 'complete' | 'error' {
-    if (!this.isRecord(page)) return 'writing';
+    if (!isRecord(page)) return 'writing';
     const props = page.properties as Record<string, unknown> | undefined;
     if (!props) return 'writing';
     const statusProp = (props['status'] ?? props['Status']) as unknown;
-    if (!this.isRecord(statusProp)) return 'writing';
+    if (!isRecord(statusProp)) return 'writing';
     const select = statusProp['select'];
-    if (!this.isRecord(select)) return 'writing';
+    if (!isRecord(select)) return 'writing';
     const name = select['name'];
     if (typeof name !== 'string') return 'writing';
     if (name === 'writing' || name === 'adding' || name === 'complete' || name === 'error') return name;

@@ -6,6 +6,7 @@ import { marked } from 'marked';
 import { config } from '../config/index.js';
 import { logger } from '../lib/logger.js';
 import { NotionBlock } from '../services/notionService.js';
+import { isRecord } from '../lib/utils.js';
 
 export interface ImageReference {
   blockId: string;
@@ -71,11 +72,6 @@ class ContentConverter {
       | { type: 'external'; external?: { url?: string }; caption?: NotionRichText[] }
       | { type: 'file'; file?: { url?: string }; caption?: NotionRichText[] };
 
-    // TODO: 리팩토링 필요. utils로 이동 고려
-    // User-defined type guards
-    // Assure that v is a non-null object
-    // return true then v is Record<string, unknown>
-    const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
     // TODO: 리팩토링 필요. 작은 함수로 쪼개기
     // User-defined type guards
     const isNotionImage = (v: unknown): v is NotionImage => {
