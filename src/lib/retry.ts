@@ -72,21 +72,19 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// TODO: 사용되지 않는다면 제거 고려
-export function isRateLimitError(error: any): boolean {
-  return (
-    error?.status === 429 ||
-    error?.code === 'rate_limited' ||
-    error?.message?.toLowerCase().includes('rate limit')
-  );
-}
+// export function isRateLimitError(error: any): boolean {
+//   return (
+//     error?.status === 429 ||
+//     error?.code === 'rate_limited' ||
+//     error?.message?.toLowerCase().includes('rate limit')
+//   );
+// }
 
-// TODO: 사용되지 않는다면 제거 고려
-// This function can be used in retryWithBackoff's onRetry to determine if we should retry
-export function shouldRetry(error: any): boolean {
-  // Retry on rate limits, network errors, and 5xx errors
-  if (isRateLimitError(error)) return true;
-  if (error?.code === 'ECONNRESET' || error?.code === 'ETIMEDOUT') return true;
-  if (error?.status >= 500 && error?.status < 600) return true;
-  return false;
-}
+// // This function can be used in retryWithBackoff's onRetry to determine if we should retry
+// export function shouldRetry(error: any): boolean {
+//   // Retry on rate limits, network errors, and 5xx errors
+//   if (isRateLimitError(error)) return true;
+//   if (error?.code === 'ECONNRESET' || error?.code === 'ETIMEDOUT') return true;
+//   if (error?.status >= 500 && error?.status < 600) return true;
+//   return false;
+// }
