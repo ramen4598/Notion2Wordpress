@@ -1,3 +1,6 @@
+// Description: Database service using better-sqlite3
+// for managing sync jobs, job items, image assets, and page-post mappings.
+
 import DatabaseConstructor, { type Database as BetterSqliteDatabase } from 'better-sqlite3';
 import { config } from '../config/index.js';
 import { logger } from '../lib/logger.js';
@@ -7,6 +10,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const DEFAULT_SCHEMA_PATH = path.resolve(__dirname, '../../config/schema.sql');
 
 export interface SyncJob {
   id?: number;
@@ -78,11 +82,13 @@ class DatabaseService {
   }
 
   private async initSchema(): Promise<void> {
-    const schemaPath = path.resolve(__dirname, '../../config/schema.sql');
+    const schemaPath = path.resolve(__dirname, DEFAULT_SCHEMA_PATH);
     const schema = fs.readFileSync(schemaPath, 'utf-8');
 
     try {
-      this.db!.exec(schema);
+      // What happens if the existing schema exists? 
+      // -> Since schema.sql includes IF NOT EXISTS, there is no problem
+      this.db!.exec(schema); // ! means db must not be null here
       logger.info('Database schema initialized');
     } catch (err) {
       logger.error('Failed to initialize database schema', err);
@@ -119,7 +125,7 @@ class DatabaseService {
 
   async updateSyncJob(
     id: number,
-    updates: Partial<Omit<SyncJob, 'id' | 'started_at'>>
+    updates: Partial<Omit<SyncJob, 'id' | 'started_at'>> // id and started_at are not updatable
   ): Promise<void> {
     const fields: string[] = [];
     const values: any[] = [];
@@ -166,7 +172,9 @@ class DatabaseService {
 
     try {
       const row = this.db!.prepare(sql).get(id) as SyncJob | undefined;
-      return row ?? null;
+      // Nullish Coalescing Operator
+      // return if row is undefined and null, return right side value
+      return row ?? null; 
     } catch (err) {
       logger.error(`Failed to get sync job ${id}`, err);
       throw err;
@@ -175,10 +183,10 @@ class DatabaseService {
 
   async getLastSyncTimestamp(): Promise<string | null> {
     const sql = `
-      SELECT last_sync_timestamp 
-      FROM sync_jobs 
+      SELECT last_sync_timestamp
+      FROM sync_jobs
       WHERE status = 'completed' AND last_sync_timestamp IS NOT NULL
-      ORDER BY completed_at DESC 
+      ORDER BY completed_at DESC
       LIMIT 1
     `;
 
@@ -192,7 +200,9 @@ class DatabaseService {
   }
 
   // Sync Job Items
-  async createSyncJobItem(item: Omit<SyncJobItem, 'id' | 'created_at' | 'updated_at'>): Promise<number> {
+  async createSyncJobItem(
+    item: Omit<SyncJobItem, 'id' | 'created_at' | 'updated_at'>
+  ): Promise<number> {
     const sql = `
       INSERT INTO sync_job_items (sync_job_id, notion_page_id, wp_post_id, status, retry_count)
       VALUES (?, ?, ?, ?, ?)

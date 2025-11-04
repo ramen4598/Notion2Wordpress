@@ -1,3 +1,5 @@
+// Description: Converts Notion page content to HTML and extracts image references.
+
 import { Client } from '@notionhq/client';
 import { NotionToMarkdown } from 'notion-to-md';
 import { marked } from 'marked';
@@ -37,11 +39,12 @@ class ContentConverter {
       const images = this.extractImages(blocks);
 
       // Convert to Markdown
+      // TODO: 매개변수로 받은 block를 사용하지 않고 있음. blocks와 mdBlocks 둘 중 하나로 통일 필요
+      // const mdBlocks = await this.n2m.blocksToMarkdown(blocks); // 가능?
       const mdBlocks = await this.n2m.pageToMarkdown(pageId);
       const mdString = this.n2m.toMarkdownString(mdBlocks);
 
-      // Handle empty pages gracefully
-      const markdownContent = mdString.parent ?? '';
+      const markdownContent = mdString.parent ?? ''; // Handle empty pages gracefully
       logger.debug(`Converted page ${pageId} to Markdown`, { length: markdownContent.length });
 
       // Convert Markdown to HTML
@@ -68,16 +71,24 @@ class ContentConverter {
       | { type: 'external'; external?: { url?: string }; caption?: NotionRichText[] }
       | { type: 'file'; file?: { url?: string }; caption?: NotionRichText[] };
 
+    // TODO: 리팩토링 필요. 작은 함수로 쪼개기
+    // User-defined type guards
+    // Assure that v is a non-null object
+    // return true then v is Record<string, unknown>
     const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+  // TODO: 리팩토링 필요. 작은 함수로 쪼개기
     const isNotionImage = (v: unknown): v is NotionImage => {
       if (!isRecord(v) || typeof v.type !== 'string') return false;
       if (v.type === 'external') return true;
       if (v.type === 'file') return true;
       return false;
     };
+    // TODO: 리팩토링 필요. 작은 함수로 쪼개기
+    // TODO: 삼항연산자 사용하지 말고 깔끔하게 리팩토링
     const toAltText = (arr?: NotionRichText[]) =>
       Array.isArray(arr) && arr.length > 0 ? arr.map((c) => c.plain_text || '').join('') : undefined;
 
+    // TODO: 리팩토링 필요. 작은 함수로 쪼개기
     const extractFromBlock = (block: NotionBlock): void => {
       // Extract image from current block
       const img = (block as { image?: unknown }).image;
@@ -89,6 +100,7 @@ class ContentConverter {
         if (url) images.push({ blockId: block.id, url, altText });
       }
 
+      // TODO: 삼항연산자 사용하지 말고 깔끔하게 리팩토링
       // Recursively extract from children blocks (for column_list, column, toggle, etc.)
       const childrenKey = block.type === 'column_list' ? 'children' : 
                           block.type === 'column' ? 'children' :
@@ -100,6 +112,7 @@ class ContentConverter {
         const children = (block as { children?: unknown }).children;
         if (Array.isArray(children)) {
           for (const child of children) {
+            // Check type of child.type is string
             if (isRecord(child) && typeof (child as { type?: unknown }).type === 'string') {
               extractFromBlock(child as NotionBlock);
             }

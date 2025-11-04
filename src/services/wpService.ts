@@ -31,10 +31,13 @@ export interface UploadMediaResponse {
   mimeType: string;
 }
 
+// TODO: Refactor to reduce duplication with logging code in retryWithBackoff calls
+
 class WordPressService {
   private client: AxiosInstance;
 
   constructor() {
+    // Use Buffer.from to create Base64 encoded auth string
     const auth = Buffer.from(`${config.wpUsername}:${config.wpAppPassword}`).toString('base64');
 
     this.client = axios.create({
@@ -47,39 +50,37 @@ class WordPressService {
   }
 
   async createDraftPost(options: CreatePostOptions): Promise<CreatePostResponse> {
+
     const { title, content, status = 'draft' } = options;
 
-    try {
-      const response = await retryWithBackoff(
-        async () => {
-          const res = await this.client.post('/wp/v2/posts', {
-            title,
-            content,
-            status,
-          });
-          return res.data;
-        },
-        {
-          onRetry: (error, attempt) => {
-            const errorMsg = isAxiosError(error) 
-              ? `${error.message} (${error.response?.status || 'unknown'})`
-              : error.message;
-            logger.warn(`Retrying WordPress post creation (attempt ${attempt})`, {
-              title,
-              error: errorMsg,
-            });
-          },
-        }
-      );
+    const fn = async () => {
+      const res = await this.client.post('/wp/v2/posts', {
+        title,
+        content,
+        status,
+      });
+      return res.data;
+    };
 
-        interface WPPostResponse {
-          id: number;
-          title: { rendered: string };
-          link: string;
-          status: string;
-        }
-      
-        const post = response as WPPostResponse;
+    const onRetryFn = (error: Error, attempt: number) => {
+      const errorMsg = isAxiosError(error) 
+        ? `${error.message} (${error.response?.status || 'unknown'})`
+        : error.message;
+      logger.warn(`Retrying WordPress post creation (attempt ${attempt})`, {
+        title,
+        error: errorMsg,
+      });
+    }
+
+    interface WPPostResponse {
+      id: number;
+      title: { rendered: string };
+      link: string;
+      status: string;
+    }
+
+    try {
+      const post = (await retryWithBackoff(fn, { onRetry: onRetryFn })) as WPPostResponse;
 
       logger.info(`Created WordPress post: ${post.id}`, {
         title: post.title.rendered,
@@ -92,57 +93,58 @@ class WordPressService {
         link: post.link,
         status: post.status,
       };
-      } catch (error: unknown) {
-        let message: string;
-        if (isAxiosError(error)) {
-          message = `${error.message}${error.response?.status ? ` (HTTP ${error.response.status})` : ''}`;
-        } else {
-          message = error instanceof Error ? error.message : String(error);
-        }
-        logger.error('Failed to create WordPress post', { title, error: message });
-        throw new Error(`WordPress post creation failed: ${message}`);
+    } catch (error: unknown) {
+      let message: string;
+      if (isAxiosError(error)) {
+        message = `${error.message}${error.response?.status ? ` (HTTP ${error.response.status})` : ''}`;
+      } else {
+        message = error instanceof Error ? error.message : String(error);
+      }
+      logger.error('Failed to create WordPress post', { title, error: message });
+      throw new Error(`WordPress post creation failed: ${message}`);
     }
   }
 
   async uploadMedia(options: UploadMediaOptions): Promise<UploadMediaResponse> {
     const { buffer, filename, contentType, altText } = options;
 
-    try {
-      const formData = new FormData();
-      formData.append('file', buffer, {
-        filename,
-        contentType,
+    const formData = new FormData();
+    formData.append('file', buffer, {
+      filename,
+      contentType,
+    });
+
+    if (altText) {
+      formData.append('alt_text', altText);
+    }
+
+    type WPCreateMediaResponse = {
+      id: number;
+      source_url: string;
+      media_type: string;
+      mime_type: string;
+    };
+
+    const fn = async () => {
+      const res = await this.client.post('/wp/v2/media', formData, {
+        headers: formData.getHeaders(),
       });
+      return res.data as WPCreateMediaResponse;
+    };
 
-      if (altText) {
-        formData.append('alt_text', altText);
-      }
+    const onRetryFn = (error: Error, attempt: number) => {
+      const errorMsg = isAxiosError(error)
+        ? `${error.message} (${error.response?.status || 'unknown'})`
+        : error.message;
+      logger.warn(`Retrying WordPress media upload (attempt ${attempt})`, {
+        filename,
+        error: errorMsg,
+      });
+    };
 
-      type WPCreateMediaResponse = {
-        id: number;
-        source_url: string;
-        media_type: string;
-        mime_type: string;
-      };
-
+    try {
       const response = (await retryWithBackoff(
-        async () => {
-          const res = await this.client.post('/wp/v2/media', formData, {
-            headers: formData.getHeaders(),
-          });
-          return res.data as WPCreateMediaResponse;
-        },
-        {
-          onRetry: (error, attempt) => {
-            const errorMsg = isAxiosError(error)
-              ? `${error.message} (${error.response?.status || 'unknown'})`
-              : error.message;
-            logger.warn(`Retrying WordPress media upload (attempt ${attempt})`, {
-              filename,
-              error: errorMsg,
-            });
-          },
-        }
+        fn, { onRetry: onRetryFn }
       )) as WPCreateMediaResponse;
 
       logger.info(`Uploaded media to WordPress: ${response.id}`, {
@@ -169,27 +171,25 @@ class WordPressService {
   }
 
   async deletePost(postId: number): Promise<void> {
-    try {
-      await retryWithBackoff(
-        async () => {
-          const res = await this.client.delete(`/wp/v2/posts/${postId}`, {
-            params: { force: true },
-          });
-          return res.data;
-        },
-        {
-          onRetry: (error, attempt) => {
-            const errorMsg = isAxiosError(error)
-              ? `${error.message} (${error.response?.status || 'unknown'})`
-              : error.message;
-            logger.warn(`Retrying WordPress post deletion (attempt ${attempt})`, {
-              postId,
-              error: errorMsg,
-            });
-          },
-        }
-      );
+    const fn = async () => {
+      const res = await this.client.delete(`/wp/v2/posts/${postId}`, {
+        params: { force: true },
+      });
+      return res.data;
+    };
 
+    const onRetryFn = (error: Error, attempt: number) => {
+      const errorMsg = isAxiosError(error)
+        ? `${error.message} (${error.response?.status || 'unknown'})`
+        : error.message;
+      logger.warn(`Retrying WordPress post deletion (attempt ${attempt})`, {
+        postId,
+        error: errorMsg,
+      });
+    };
+
+    try {
+      await retryWithBackoff(fn, { onRetry: onRetryFn });
       logger.info(`Deleted WordPress post: ${postId}`);
     } catch (error: unknown) {
       logger.error(`Failed to delete WordPress post ${postId}`, error);
@@ -204,31 +204,35 @@ class WordPressService {
   }
 
   async deleteMedia(mediaId: number): Promise<void> {
-    try {
-      await retryWithBackoff(
-        async () => {
-          const res = await this.client.delete(`/wp/v2/media/${mediaId}`, {
-            params: { force: true },
-          });
-          return res.data;
-        },
-        {
-          onRetry: (error, attempt) => {
-            const errorMsg = isAxiosError(error)
-              ? `${error.message} (${error.response?.status || 'unknown'})`
-              : error.message;
-            logger.warn(`Retrying WordPress media deletion (attempt ${attempt})`, {
-              mediaId,
-              error: errorMsg,
-            });
-          },
-        }
-      );
+    const fn = async () => {
+      const res = await this.client.delete(`/wp/v2/media/${mediaId}`, {
+        params: { force: true },
+      });
+      return res.data;
+    };
+    
+    const onRetryFn = (error: Error, attempt: number) => {
+      const errorMsg = isAxiosError(error)
+        ? `${error.message} (${error.response?.status || 'unknown'})`
+        : error instanceof Error ? error.message : String(error);
+      logger.warn(`Retrying WordPress media deletion (attempt ${attempt})`, {
+        mediaId,
+        error: errorMsg,
+      });
+    };
 
+    try {
+      await retryWithBackoff(fn, { onRetry: onRetryFn });
       logger.info(`Deleted WordPress media: ${mediaId}`);
     } catch (error: unknown) {
       logger.warn(`Failed to delete WordPress media ${mediaId}`, error);
-      // Don't throw - media deletion failures shouldn't block rollback
+      let message: string;
+      if (isAxiosError(error)) {
+        message = `${error.message}${error.response?.status ? ` (HTTP ${error.response.status})` : ''}`;
+      } else {
+        message = error instanceof Error ? error.message : String(error);
+      }
+      throw new Error(`WordPress media deletion failed: ${message}`);
     }
   }
 

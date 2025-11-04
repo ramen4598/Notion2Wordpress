@@ -1,3 +1,5 @@
+// Description: Utility functions for retrying operations with exponential backoff
+
 import { logger } from './logger.js';
 
 export interface RetryOptions {
@@ -23,7 +25,7 @@ export async function retryWithBackoff<T>(
     initialDelayMs: getNum(process.env.RETRY_INITIAL_DELAY_MS, 1000),
     maxDelayMs: getNum(process.env.RETRY_MAX_DELAY_MS, 30000),
     backoffMultiplier: getNum(process.env.RETRY_BACKOFF_MULTIPLIER, 2),
-  } as const;
+  } as const; // "as const" to make properties readonly
 
   const {
     maxAttempts = defaults.maxAttempts,
@@ -40,7 +42,7 @@ export async function retryWithBackoff<T>(
     try {
       return await fn();
     } catch (error) {
-      lastError = error as Error;
+      lastError = error as Error; // error must be of type Error
 
       if (attempt === maxAttempts) {
         logger.error(`Max retry attempts (${maxAttempts}) exceeded`, lastError);
@@ -51,6 +53,7 @@ export async function retryWithBackoff<T>(
         error: lastError.message,
       });
 
+      // Call onRetry callback if provided
       if (onRetry) {
         onRetry(lastError, attempt);
       }
@@ -77,6 +80,8 @@ export function isRateLimitError(error: any): boolean {
   );
 }
 
+// TODO: onRetry 콜백에서 사용하도록 변경할 것.
+// This function can be used in retryWithBackoff's onRetry to determine if we should retry
 export function shouldRetry(error: any): boolean {
   // Retry on rate limits, network errors, and 5xx errors
   if (isRateLimitError(error)) return true;

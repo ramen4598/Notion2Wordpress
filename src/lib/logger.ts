@@ -1,3 +1,5 @@
+// Description: A simple logging utility with different log levels and structured output.
+
 import { config } from '../config/index.js';
 
 export enum LogLevel {

@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// shebang to specify Node.js interpreter
+// MUST be at the very top of the file
+
+// Description: CLI script to trigger a manual synchronization job
 import { logger } from '../lib/logger.js';
 import { db } from '../db/index.js';
 import { syncOrchestrator } from '../orchestrator/syncOrchestrator.js';

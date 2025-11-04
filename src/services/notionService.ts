@@ -1,3 +1,6 @@
+// Description: Service to interact with Notion API
+// Reference: https://developers.notion.com/reference/
+
 import { Client } from '@notionhq/client';
 import { config } from '../config/index.js';
 import { logger } from '../lib/logger.js';
@@ -15,7 +18,7 @@ export interface NotionPage {
 export interface NotionBlock {
   id: string;
   type: string;
-  [key: string]: unknown;
+  [key: string]: unknown; // Index Signature. Allow flexible structure.
 }
 
 export interface QueryPagesOptions {
@@ -23,12 +26,14 @@ export interface QueryPagesOptions {
   statusFilter?: 'adding';
 }
 
+// TODO: has_more, next_cursor 제거, api-contracts.md 수정
 export interface QueryPagesResponse {
   pages: NotionPage[];
   hasMore: boolean;
   nextCursor?: string;
 }
 
+// TODO: Refactor to reduce duplication with logging code.
 class NotionService {
   private client: Client;
 
@@ -40,6 +45,7 @@ class NotionService {
     return typeof value === 'object' && value !== null;
   }
 
+  // TODO : 삼항연산자 사용하지 말고 깔끔하게 리팩토링
   private extractPlainText(arr: unknown): string {
     if (!Array.isArray(arr)) return '';
     return arr
@@ -49,17 +55,17 @@ class NotionService {
 
   async queryPages(options: QueryPagesOptions = {}): Promise<QueryPagesResponse> {
     const { lastSyncTimestamp, statusFilter = 'adding' } = options;
-    // Build filter (Notion API expects either a property filter or a compound filter)
-    // Use 'status' type instead of 'select' for Notion status properties
+
     const statusFilterObj = {
       property: 'status',
       status: { equals: statusFilter },
     } as const;
 
-    // If incremental timestamp provided, use compound AND filter
+    // TODO : 삼항연산자 사용하지 말고 깔끔하게 리팩토링
+    // If you've ever synced before, add the last edited time filter
     const filter: Record<string, unknown> = lastSyncTimestamp
-      ? {
-          and: [
+      ? { // object named 'and' with an array of filter objects
+          and: [ // status filter AND last edited time filter 
             statusFilterObj,
             {
               timestamp: 'last_edited_time',
@@ -71,7 +77,10 @@ class NotionService {
 
     try {
       const response = await retryWithBackoff(
+          // TODO: Follow official Notion docs. https://developers.notion.com/reference/query-a-data-source
+          // TODO: Add sorting option. sort by created_time, ascending.
           async () => {
+            // TODO: has_more, next_cursor 처리. Refer getPageBlocks method.
             return await this.client.request<{ results: unknown[]; has_more: boolean; next_cursor: string | null }>({
               path: `data_sources/${config.notionDatabaseId}/query`,
               method: 'post',
@@ -101,6 +110,7 @@ class NotionService {
         properties: page.properties,
       }));
 
+      // TODO: has_more, next_cursor 제거
       return {
         pages,
         hasMore: response.has_more,
@@ -113,55 +123,50 @@ class NotionService {
     }
   }
 
+  private async fetchBlocksRecursively(blockId: string): Promise<NotionBlock[]> {
+    const blocks: NotionBlock[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const response = await retryWithBackoff(
+        async () => {
+          return await this.client.blocks.children.list({
+            block_id: blockId,
+            start_cursor: cursor,
+          });
+        },
+        {
+          onRetry: (error, attempt) => {
+            logger.warn(`Retrying get blocks (attempt ${attempt})`, {
+              blockId,
+              error: error.message,
+            });
+          },
+        }
+      );
+
+      const fetchedBlocks = response.results as NotionBlock[];
+      blocks.push(...fetchedBlocks);
+      cursor = response.has_more ? response.next_cursor || undefined : undefined;
+    } while (cursor);
+
+    // Recursively fetch children for blocks that have children
+    // Common parent blocks: column_list, column, toggle, synced_block, table, bulleted_list_item, etc.
+    for (const block of blocks) {
+      const hasChildren = (block as { has_children?: boolean }).has_children;
+      if (hasChildren) {
+        const children = await this.fetchBlocksRecursively(block.id);
+        // Attach children to the block for easier processing
+        (block as { children?: NotionBlock[] }).children = children;
+      }
+    }
+
+    return blocks;
+  }
+
   async getPageBlocks(pageId: string): Promise<NotionBlock[]> {
     try {
-      const allBlocks: NotionBlock[] = [];
-
-      // Helper function to recursively fetch blocks and their children
-      const fetchBlocksRecursively = async (blockId: string): Promise<NotionBlock[]> => {
-        const blocks: NotionBlock[] = [];
-        let cursor: string | undefined;
-
-        do {
-          const response = await retryWithBackoff(
-            async () => {
-              return await this.client.blocks.children.list({
-                block_id: blockId,
-                start_cursor: cursor,
-              });
-            },
-            {
-              onRetry: (error, attempt) => {
-                logger.warn(`Retrying get blocks (attempt ${attempt})`, {
-                  blockId,
-                  error: error.message,
-                });
-              },
-            }
-          );
-
-          const fetchedBlocks = response.results as NotionBlock[];
-          blocks.push(...fetchedBlocks);
-          cursor = response.has_more ? response.next_cursor || undefined : undefined;
-        } while (cursor);
-
-        // Recursively fetch children for blocks that have children
-        // Common parent blocks: column_list, column, toggle, synced_block, table, bulleted_list_item, etc.
-        for (const block of blocks) {
-          const hasChildren = (block as { has_children?: boolean }).has_children;
-          if (hasChildren) {
-            const children = await fetchBlocksRecursively(block.id);
-            // Attach children to the block for easier processing
-            (block as { children?: NotionBlock[] }).children = children;
-          }
-        }
-
-        return blocks;
-      };
-
-      const topLevelBlocks = await fetchBlocksRecursively(pageId);
-      allBlocks.push(...topLevelBlocks);
-
+      const allBlocks: NotionBlock[] = await this.fetchBlocksRecursively(pageId);
       logger.info(`Retrieved ${allBlocks.length} blocks from page ${pageId} (including nested)`);
       return allBlocks;
     } catch (error: unknown) {
@@ -175,31 +180,30 @@ class NotionService {
     pageId: string,
     status: 'complete' | 'error'
   ): Promise<{ success: boolean; updatedTime: string }> {
-    try {
-      const response = await retryWithBackoff(
-        async () => {
-          return await this.client.pages.update({
-            page_id: pageId,
-            properties: {
-              status: {
-                status: {
-                  name: status,
-                },
-              },
-            },
-          });
-        },
-        {
-          onRetry: (error, attempt) => {
-            logger.warn(`Retrying update page status (attempt ${attempt})`, {
-              pageId,
-              status,
-              error: error.message,
-            });
-          },
-        }
-      );
 
+    const fn = async () => {
+      return await this.client.pages.update({
+        page_id: pageId,
+        properties: {
+          status: { // status property
+            status: {
+              name: status, // 'complete' or 'error'
+            },
+          },
+        },
+      });
+    };
+    
+    const onRetryFn = (error: Error, attempt: number) => {
+      logger.warn(`Retrying update page status (attempt ${attempt})`, {
+        pageId,
+        status,
+        error: error.message,
+      });
+    };
+
+    try {
+      const response = await retryWithBackoff(fn, {onRetry: onRetryFn});
       logger.info(`Updated page ${pageId} status to: ${status}`);
       type UpdatePageResponse = { last_edited_time: string };
       return {
@@ -220,10 +224,14 @@ class NotionService {
     if (!props) return 'Untitled';
     const candidate = (props['title'] ?? props['Title'] ?? props['Name']) as unknown;
     if (!this.isRecord(candidate)) return 'Untitled';
-    const arr = candidate['title'];
-    const text = this.extractPlainText(arr);
-    if (text) return text;
-    return 'Untitled';
+      
+    // Notion title property has 'title' array according to API spec
+    // https://developers.notion.com/reference/property-object#title
+    const titleArray = candidate['title'];
+    if (!Array.isArray(titleArray)) return 'Untitled';
+      
+    const text = this.extractPlainText(titleArray);
+    return text || 'Untitled';
   }
 
   private extractStatus(page: { properties?: Record<string, unknown> } | unknown): 'writing' | 'adding' | 'complete' | 'error' {

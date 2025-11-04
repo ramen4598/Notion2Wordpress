@@ -1,12 +1,18 @@
+// Description: Configuration module to load environment variables and provide typed access throughout the application.
+
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// meta is a special object in ES modules that provides metadata about the current module
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const DEFAULT_ENV_PATH = '../../.env';
+const DEFAULT_DATABASE_PATH = './data/sync.db';
 
 // Load environment variables
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+// from .env file to the process.env object
+dotenv.config({ path: path.resolve(__dirname, DEFAULT_ENV_PATH) });
 
 export interface Config {
   // Notion
@@ -61,6 +67,7 @@ function getEnvNumber(key: string, defaultValue: number): number {
 function getEnvBoolean(key: string, defaultValue: boolean): boolean {
   const value = process.env[key];
   if (!value) return defaultValue;
+  // === 'true' means true, anything else is false
   return value.toLowerCase() === 'true';
 }
 
@@ -80,11 +87,11 @@ export const config: Config = {
   telegramChatId: getEnv('TELEGRAM_CHAT_ID'),
 
   // Sync
-  syncSchedule: getEnv('SYNC_SCHEDULE', '*/5 * * * *'),
+  syncSchedule: getEnv('SYNC_SCHEDULE', '*/5 * * * *'), // Default: every 5 minutes
   nodeEnv: getEnv('NODE_ENV', 'development'),
 
   // Database
-  databasePath: getEnv('DATABASE_PATH', './data/sync.db'),
+  databasePath: getEnv('DATABASE_PATH', DEFAULT_DATABASE_PATH),
   logLevel: getEnv('LOG_LEVEL', 'info'),
 
   // Image Download

@@ -1,3 +1,5 @@
+// Description: Orchestrates the synchronization process between Notion, ContentConverter and WordPress.
+
 import { db } from '../db/index.js';
 import { notionService } from '../services/notionService.js';
 import { wpService } from '../services/wpService.js';
@@ -22,6 +24,7 @@ export interface ExecuteSyncJobResponse {
   errors: SyncError[];
 }
 
+// TODO: 전체적으로 리팩토링 필요. 가독성 및 유지보수성 향상
 class SyncOrchestrator {
   async executeSyncJob(jobType: 'scheduled' | 'manual'): Promise<ExecuteSyncJobResponse> {
     logger.info(`Starting sync job: ${jobType}`);
@@ -38,6 +41,7 @@ class SyncOrchestrator {
       const lastSyncTimestamp = await db.getLastSyncTimestamp();
       logger.info('Querying Notion pages', { lastSyncTimestamp });
 
+      // Get pages
       // Query Notion pages with status=adding
       const { pages } = await notionService.queryPages({
         lastSyncTimestamp: lastSyncTimestamp || undefined,
@@ -46,13 +50,13 @@ class SyncOrchestrator {
 
       logger.info(`Found ${pages.length} pages to sync`);
 
-      // Process each page
       for (const page of pages) {
         pagesProcessed++;
         logger.info(`Processing page ${pagesProcessed}/${pages.length}: ${page.title}`, {
           pageId: page.id,
         });
 
+        // Sync each page
         try {
           await this.syncPage(jobId, page);
           pagesSucceeded++;
@@ -109,6 +113,7 @@ class SyncOrchestrator {
         errors,
       };
     } catch (error: any) {
+      // Handle sync job failure, not individual sync job item failures.
       // Fatal error - mark job as failed
       await db.updateSyncJob(jobId, {
         status: 'failed',
@@ -151,7 +156,7 @@ class SyncOrchestrator {
         retry_count: 0,
       });
 
-      // Get page blocks
+      // Get page notion-blocks
       const blocks = await notionService.getPageBlocks(page.id);
 
       // Convert to HTML and extract images
@@ -176,6 +181,7 @@ class SyncOrchestrator {
           });
 
           // Download image
+          // TODO: downloadMultiple 사용하도록 수정. See imageDownloader.ts:96.
           const { buffer, hash, contentType } = await imageDownloader.download({
             url: image.url,
           });
@@ -209,6 +215,7 @@ class SyncOrchestrator {
         } catch (error: any) {
           logger.warn(`Failed to upload image from block ${image.blockId}`, error);
           // Continue with other images - don't fail the whole sync
+          // TODO: 특정 이미지를 업로드하지 못한 경우 즉시 해당 페이지를 롤백하고 다음 페이지로 넘어감
         }
       }
 

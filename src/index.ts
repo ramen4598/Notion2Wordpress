@@ -1,3 +1,5 @@
+// Description: Entry point for Notion2WordPress sync service
+
 import cron from 'node-cron';
 import { config } from './config/index.js';
 import { logger } from './lib/logger.js';
@@ -21,10 +23,18 @@ async function main() {
         const result = await syncOrchestrator.executeSyncJob('scheduled');
         logger.info('Scheduled sync completed', {
           jobId: result.jobId,
+          status: result.status,
           pagesProcessed: result.pagesProcessed,
           pagesSucceeded: result.pagesSucceeded,
           pagesFailed: result.pagesFailed,
         });
+
+        if (result.errors.length > 0) {
+          logger.error('Sync completed with errors:', {
+            errorCount: result.errors.length,
+            errors: result.errors,
+          });
+        }
       } catch (error) {
         logger.error('Scheduled sync failed', error);
       }
@@ -33,12 +43,15 @@ async function main() {
     logger.info('Sync scheduler started successfully');
 
     // Keep the process running
+
+    // 'SIGINT' is sent on Ctrl+C, 'SIGTERM' is sent by process managers
     process.on('SIGINT', async () => {
       logger.info('Received SIGINT, shutting down gracefully');
       await db.close();
       process.exit(0);
     });
 
+    // 'SIGTERM' is sent on termination signal, e.g., from Docker or Kubernetes
     process.on('SIGTERM', async () => {
       logger.info('Received SIGTERM, shutting down gracefully');
       await db.close();
