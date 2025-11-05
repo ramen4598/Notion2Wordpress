@@ -20,7 +20,7 @@ class Logger {
   private level: LogLevel;
 
   constructor() {
-    this.level = logLevelMap[config.logLevel.toLowerCase()] || LogLevel.INFO;
+    this.level = logLevelMap[config.logLevel.toLowerCase()];
   }
 
   private log(level: LogLevel, message: string, data?: any) {
