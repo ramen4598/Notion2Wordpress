@@ -19,6 +19,11 @@ export interface ConvertToHTMLResponse {
   images: ImageReference[];
 }
 
+type NotionRichText = { plain_text: string };
+type NotionImage =
+  | { type: 'external'; external?: { url?: string }; caption?: NotionRichText[] }
+  | { type: 'file'; file?: { url?: string }; caption?: NotionRichText[] };
+
 class ContentConverter {
   private n2m: NotionToMarkdown;
   private notion: Client;
@@ -66,64 +71,46 @@ class ContentConverter {
 
   private extractImages(blocks: NotionBlock[]): ImageReference[] {
     const images: ImageReference[] = [];
+    for (const block of blocks) {
+      this.extractFromBlock(block, images);
+    }
+    logger.debug(`Extracted ${images.length} images from ${blocks.length} blocks`);
+    return images;
+  }
 
-    type NotionRichText = { plain_text: string };
-    type NotionImage =
-      | { type: 'external'; external?: { url?: string }; caption?: NotionRichText[] }
-      | { type: 'file'; file?: { url?: string }; caption?: NotionRichText[] };
+  private isNotionImage(v: unknown): v is NotionImage {
+    if (!isRecord(v) || typeof v.type !== 'string') return false;
+    return v.type === 'external' || v.type === 'file';
+  }
 
-    // TODO: 리팩토링 필요. 작은 함수로 쪼개기
-    // User-defined type guards
-    const isNotionImage = (v: unknown): v is NotionImage => {
-      if (!isRecord(v) || typeof v.type !== 'string') return false;
-      if (v.type === 'external') return true;
-      if (v.type === 'file') return true;
-      return false;
-    };
-    // TODO: 리팩토링 필요. 작은 함수로 쪼개기
-    const toAltText = (arr?: NotionRichText[]) => {
-      if (Array.isArray(arr) && arr.length > 0) {
-        return arr.map((c) => c.plain_text || '').join('');
-      } else {
-        return undefined;
-      }
-    };
+  private toAltText(arr?: NotionRichText[]): string | undefined {
+    if (Array.isArray(arr) && arr.length > 0) {
+      return arr.map((c) => c.plain_text || '').join('');
+    } else {
+      return undefined;
+    }
+  }
 
-    // TODO: 리팩토링 필요. 작은 함수로 쪼개기
-    const extractFromBlock = (block: NotionBlock): void => {
-      // Extract image from current block
-      const img = (block as { image?: unknown }).image;
-      if (block.type === 'image' && isRecord(img) && isNotionImage(img)) {
-        const imageBlock = img;
-        const url = imageBlock.type === 'external' ? imageBlock.external?.url : imageBlock.file?.url;
-        const altText = toAltText(imageBlock.caption);
-
-        if (url) images.push({ blockId: block.id, url, altText });
-      }
-
-      // Recursively extract from children blocks (for column_list, column, toggle, etc.)
-      const typeList = ['column_list', 'column', 'toggle', 'synced_block', 'table'];
-      const ableToHaveChildren : boolean = typeList.includes(block.type);
-
-      if (ableToHaveChildren && isRecord(block)) {
-        const children = (block as { children?: unknown }).children;
-        if (Array.isArray(children)) {
-          for (const child of children) {
-            // Check type of child.type is string
-            if (isRecord(child) && typeof (child as { type?: unknown }).type === 'string') {
-              extractFromBlock(child as NotionBlock);
-            }
+  private extractFromBlock(block: NotionBlock, images: ImageReference[]): void {
+    const img = (block as { image?: unknown }).image;
+    if (block.type === 'image' && isRecord(img) && this.isNotionImage(img)) {
+      const imageBlock = img;
+      const url = imageBlock.type === 'external' ? imageBlock.external?.url : imageBlock.file?.url;
+      const altText = this.toAltText(imageBlock.caption);
+      if (url) images.push({ blockId: block.id, url, altText });
+    }
+    const typeList = ['column_list', 'column', 'toggle', 'synced_block', 'table'];
+    const ableToHaveChildren : boolean = typeList.includes(block.type);
+    if (ableToHaveChildren && isRecord(block)) {
+      const children = (block as { children?: unknown }).children;
+      if (Array.isArray(children)) {
+        for (const child of children) {
+          if (isRecord(child) && typeof (child as { type?: unknown }).type === 'string') {
+            this.extractFromBlock(child as NotionBlock, images);
           }
         }
       }
-    };
-
-    for (const block of blocks) {
-      extractFromBlock(block);
     }
-
-    logger.debug(`Extracted ${images.length} images from ${blocks.length} blocks`);
-    return images;
   }
 }
 
