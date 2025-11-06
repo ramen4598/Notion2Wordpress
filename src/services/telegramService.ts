@@ -19,39 +19,56 @@ export interface NotificationOptions {
 }
 
 class TelegramService {
-  private bot: Telegraf;
-  private chatId: string;
+  private bot: Telegraf | null;
+  private chatId: string | null;
+  private enabled: boolean;
 
   constructor() {
+    this.enabled = config.telegramEnabled;
+
+    if(!this.enabled) {
+      this.bot = null;
+      this.chatId = null;
+      logger.info('Telegram notifications are disabled');
+      return;
+    }
+
+    if (!config.telegramBotToken || !config.telegramChatId) {
+      logger.warn('Telegram is enabled but credentials are missing. Disabling notifications.');
+      this.enabled = false;
+      this.bot = null;
+      this.chatId = null;
+      return;
+    }
+
     this.bot = new Telegraf(config.telegramBotToken);
     this.chatId = config.telegramChatId;
   }
 
   async sendSyncNotification(options: NotificationOptions): Promise<void> {
-    const { jobId, jobType, status, pagesProcessed, pagesSucceeded, pagesFailed, errors } =
-      options;
+    if (!this.checkConfigured()) return;
+
+    const { jobId, jobType, status, pagesProcessed, pagesSucceeded, pagesFailed, errors } = options;
+    const message = this.formatNotificationMessage({
+      jobId,
+      jobType,
+      status,
+      pagesProcessed,
+      pagesSucceeded,
+      pagesFailed,
+      errors,
+    });
 
     try {
-      const message = this.formatNotificationMessage({
-        jobId,
-        jobType,
-        status,
-        pagesProcessed,
-        pagesSucceeded,
-        pagesFailed,
-        errors,
-      });
-
-      await this.bot.telegram.sendMessage(this.chatId, message, {
+      await this.bot!.telegram.sendMessage(this.chatId!, message, {
         parse_mode: 'Markdown',
         link_preview_options: { is_disabled: true },
       });
-
       logger.info(`Sent Telegram notification for job ${jobId}`, { status });
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Failed to send Telegram notification', {
         jobId,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
       // Don't throw - notification failures shouldn't block the sync
     }
@@ -95,12 +112,29 @@ class TelegramService {
     if (error.length <= maxLength) return error;
     return error.substring(0, maxLength) + '...';
   }
+  
+  private checkConfigured(): boolean {
+    if (!this.enabled) {
+      logger.info('Telegram notifications disabled, skipping notification');
+      return false;
+    }
+    if (!this.bot) {
+      logger.warn('Telegram bot not configured, skipping notification');
+      return false;
+    }
+    if (!this.chatId) {
+      logger.warn('Telegram chat ID not configured, skipping notification');
+      return false;
+    }
+    return true;
+  }
 
   async sendTestMessage(message: string): Promise<void> {
+    if (!this.checkConfigured()) return;
     try {
-      await this.bot.telegram.sendMessage(this.chatId, message);
+      await this.bot!.telegram.sendMessage(this.chatId!, message);
       logger.info('Sent test Telegram message');
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Failed to send test Telegram message', error);
       throw error;
     }

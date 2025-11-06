@@ -26,8 +26,9 @@ export interface Config {
   wpVerifySsl: boolean;
 
   // Telegram
-  telegramBotToken: string;
-  telegramChatId: string;
+  telegramEnabled: boolean;
+  telegramBotToken: string | undefined;
+  telegramChatId: string | undefined;
 
   // Sync
   syncSchedule: string;
@@ -71,6 +72,10 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
   return value.toLowerCase() === 'true';
 }
 
+function getEnvOrUndefined(key: string): string | undefined {
+  return process.env[key] || undefined;
+}
+
 export const config: Config = {
   // Notion
   notionApiToken: getEnv('NOTION_API_TOKEN'),
@@ -83,8 +88,9 @@ export const config: Config = {
   wpVerifySsl: getEnvBoolean('WP_VERIFY_SSL', true),
 
   // Telegram
-  telegramBotToken: getEnv('TELEGRAM_BOT_TOKEN'),
-  telegramChatId: getEnv('TELEGRAM_CHAT_ID'),
+  telegramEnabled: getEnvBoolean('TELEGRAM_ENABLED', false),
+  telegramBotToken: getEnvOrUndefined('TELEGRAM_BOT_TOKEN'),
+  telegramChatId: getEnvOrUndefined('TELEGRAM_CHAT_ID'),
 
   // Sync
   syncSchedule: getEnv('SYNC_SCHEDULE', '*/5 * * * *'), // Default: every 5 minutes
