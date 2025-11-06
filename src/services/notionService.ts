@@ -37,6 +37,12 @@ export interface ImageReference {
   placeholder: string;
 }
 
+interface pageQueryResponse {
+  results: unknown[];
+  has_more: boolean;
+  next_cursor: string | null;
+};
+
 export interface getPageHTMLResponse {
   html: string;
   images: ImageReference[];
@@ -52,51 +58,23 @@ class NotionService {
     this.n2m = new NotionToMarkdown({ notionClient: this.client });
   }
 
-  private extractPlainText(arr: unknown): string {
-    if (!Array.isArray(arr)) return '';
-    return arr.map((t) => {
-        if (!isRecord(t)) return '';
-        if (typeof t.plain_text !== 'string') return '';
-        return t.plain_text;
-      }).join('');
-  }
-
   async queryPages(options: QueryPagesOptions = {}): Promise<NotionPage[]> {
-    const { lastSyncTimestamp, statusFilter = 'adding' } = options;
 
-    const statusFilterObj = {
-      property: 'status',
-      status: { equals: statusFilter },
-    } as const;
+    type NotionRawPage = {
+      id: string;
+      last_edited_time: string;
+      created_time: string;
+      properties: Record<string, unknown>;
+    };
 
-    let filter: Record<string, unknown> = statusFilterObj;
-    // If you've ever synced before, add the last edited time filter
-    if (lastSyncTimestamp) {
-      filter = {
-        and: [
-          statusFilterObj,
-          {
-            timestamp: 'last_edited_time',
-            last_edited_time: { after: lastSyncTimestamp },
-          },
-        ],
-      };
-    }
+    const filter = this.makeFilter(options);
+    const sorts = this.makeSorts();
 
-    // TODO: Follow official Notion docs. https://developers.notion.com/reference/query-a-data-source
-    // TODO: Add sorting option. sort by created_time, ascending.
-    // TODO: has_more, next_cursor 처리. Refer getPageBlocks method.
     const fn = async () => {
-      type NotionQueryResponse = {
-        results: unknown[];
-        has_more: boolean;
-        next_cursor: string | null;
-      };
-
-      return await this.client.request<NotionQueryResponse>({
+      return await this.client.request<pageQueryResponse>({
         path: `data_sources/${config.notionDatasourceId}/query`,
         method: 'post',
-        body: { filter },
+        body: { filter, sorts },
       });
     };
 
@@ -105,14 +83,8 @@ class NotionService {
     };
 
     try {
-      const response = await retryWithBackoff( fn, { onRetry: onRetryFn });
-
-      type NotionRawPage = {
-        id: string;
-        last_edited_time: string;
-        created_time: string;
-        properties: Record<string, unknown>;
-      };
+      // TODO: pagination 처리 필요
+      const response: pageQueryResponse = await retryWithBackoff( fn, { onRetry: onRetryFn });
 
       const pages: NotionPage[] = (response.results as NotionRawPage[]).map((page) => ({
         id: page.id,
@@ -123,7 +95,6 @@ class NotionService {
         properties: page.properties,
       }));
 
-      // TODO: has_more, next_cursor 제거
       return pages;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -132,37 +103,7 @@ class NotionService {
     }
   }
 
-  private extractImagesRecursively(mdBlocks: MdBlock[]): ImageReference[] {
-    let images: ImageReference[] = [];
-
-    if (!Array.isArray(mdBlocks) || mdBlocks.length === 0) return images;
-
-    for (const block of mdBlocks) {
-      if (block.type === 'image') {
-        const b = block as { parent: string; blockId: string };
-        const p = b.parent;
-        const placeholder = `image-${b.blockId}`;
-
-        // Extract altText and url from markdown syntax ![alt](url)
-        const imageRegex = /!\[.*?\]\((.*?)\)/g;
-        let match = imageRegex.exec(p);
-        if (!match) throw new Error(`Failed to extract image url from markdown block: ${JSON.stringify(block)}`);
-        const altText = match[0].slice(2, match[0].indexOf('](')); // 2 is length of '!['
-        const url = match[1];
-
-        // Replace url with placeholder at here!
-        block.parent = block.parent.replace(url, placeholder); 
-        images.push({ blockId: b.blockId, url, altText, placeholder });
-        logger.debug(`extractImagesRecursively: extracted image - blockId: ${b.blockId}, url: ${url}, placeholder: ${placeholder}`);
-      }
-
-      const children: MdBlock[] = (block as { children?: MdBlock[] }).children || [];
-      images.push(...this.extractImagesRecursively(children));
-    }
-
-    return images;
-  }
-
+  // TODO: retryWithBackoff 적용 필요
   async getPageHTML(pageId: string): Promise<getPageHTMLResponse> {
     try{
       // Get MdBlock
@@ -227,6 +168,15 @@ class NotionService {
     }
   }
 
+  private extractPlainText(arr: unknown): string {
+    if (!Array.isArray(arr)) return '';
+    return arr.map((t) => {
+        if (!isRecord(t)) return '';
+        if (typeof t.plain_text !== 'string') return '';
+        return t.plain_text;
+      }).join('');
+  }
+
   private extractTitle(page: { properties?: Record<string, unknown> } | unknown): string {
     // Notion title property can be in different formats
     if (!isRecord(page)) return 'Untitled';
@@ -256,6 +206,72 @@ class NotionService {
     if (typeof name !== 'string') return 'writing';
     if (name === 'writing' || name === 'adding' || name === 'complete' || name === 'error') return name;
     return 'writing';
+  }
+
+  private extractImagesRecursively(mdBlocks: MdBlock[]): ImageReference[] {
+    let images: ImageReference[] = [];
+
+    if (!Array.isArray(mdBlocks) || mdBlocks.length === 0) return images;
+
+    for (const block of mdBlocks) {
+      if (block.type === 'image') {
+        const b = block as { parent: string; blockId: string };
+        const p = b.parent;
+        const placeholder = `image-${b.blockId}`;
+
+        // Extract altText and url from markdown syntax ![alt](url)
+        const imageRegex = /!\[.*?\]\((.*?)\)/g;
+        let match = imageRegex.exec(p);
+        if (!match) throw new Error(`Failed to extract image url from markdown block: ${JSON.stringify(block)}`);
+        const altText = match[0].slice(2, match[0].indexOf('](')); // 2 is length of '!['
+        const url = match[1];
+
+        // Replace url with placeholder at here!
+        block.parent = block.parent.replace(url, placeholder); 
+        images.push({ blockId: b.blockId, url, altText, placeholder });
+        logger.debug(`extractImagesRecursively: extracted image - blockId: ${b.blockId}, url: ${url}, placeholder: ${placeholder}`);
+      }
+
+      const children: MdBlock[] = (block as { children?: MdBlock[] }).children || [];
+      images.push(...this.extractImagesRecursively(children));
+    }
+
+    return images;
+  }
+
+  private makeFilter(options: QueryPagesOptions): Record<string, unknown> {
+    const { lastSyncTimestamp, statusFilter = 'adding' } = options;
+
+    const propertyFilter = {
+      "property": "status",
+      "status": { "equals": statusFilter },
+    };
+    const timestampFilter = {
+      "timestamp": "last_edited_time",
+      "last_edited_time": { "after": lastSyncTimestamp },
+    };
+
+    let filter: Record<string, unknown> = propertyFilter;
+    // If you've ever synced before, add the last edited time filter
+    if (lastSyncTimestamp) {
+      filter = {
+        "and": [
+          propertyFilter,
+          timestampFilter,
+        ],
+      };
+    }
+
+    return filter;
+  }
+
+  private makeSorts(): Record<string, unknown>[] {
+    return [
+      {
+        "timestamp": "created_time",
+        "direction": "ascending",
+      },
+    ];
   }
 }
 
