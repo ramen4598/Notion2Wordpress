@@ -1,6 +1,6 @@
 // Description: Converts Notion page content to HTML and extracts image references.
 
-import { Client } from '@notionhq/client';
+import { Client, PartialBlockObjectResponse,BlockObjectResponse } from '@notionhq/client';
 import { NotionToMarkdown } from 'notion-to-md';
 import { marked } from 'marked';
 import { config } from '../config/index.js';
@@ -12,6 +12,7 @@ export interface ImageReference {
   blockId: string;
   url: string;
   altText?: string;
+  placeholder: string;
 }
 
 export interface ConvertToHTMLResponse {
@@ -41,17 +42,15 @@ class ContentConverter {
         blockCount: blocks.length 
       });
 
-      // Extract image references before conversion
+      // Extract image references and replace url with placeholder
       const images = this.extractImages(blocks);
 
       // Convert to Markdown
-      // TODO: 매개변수로 받은 block를 사용하지 않고 있음. blocks와 mdBlocks 둘 중 하나로 통일 필요
-      // const mdBlocks = await this.n2m.blocksToMarkdown(blocks); // 가능?
-      const mdBlocks = await this.n2m.pageToMarkdown(pageId);
+      // TODO: children block에 대하여 주어진 blocks 뿐만 아니라 노션에서 다시 블록들을 불러오고 있음. 바로 html로 변환할 수 있는 다른 라이브러리 찾기
+      const mdBlocks = await this.n2m.blocksToMarkdown(blocks as Array<PartialBlockObjectResponse | BlockObjectResponse>);
       const mdString = this.n2m.toMarkdownString(mdBlocks);
 
       const markdownContent = mdString.parent ?? ''; // Handle empty pages gracefully
-      logger.debug(`Converted page ${pageId} to Markdown`, { length: markdownContent.length });
 
       // Convert Markdown to HTML
       const html = marked.parse(markdownContent) as string;
@@ -60,6 +59,8 @@ class ContentConverter {
         htmlLength: html.length,
         imageCount: images.length,
       });
+      logger.debug(`convertToHTML ${pageId} html : ${html}`);
+      logger.debug(`convertToHTML ${pageId} images: ${JSON.stringify(images)}`);
 
       return { html, images };
     } catch (error: unknown) {
@@ -71,10 +72,11 @@ class ContentConverter {
 
   private extractImages(blocks: NotionBlock[]): ImageReference[] {
     const images: ImageReference[] = [];
+    logger.debug(`extractImages: before process - blocks: ${JSON.stringify(blocks)}, images: ${JSON.stringify(images)}`);
     for (const block of blocks) {
       this.extractFromBlock(block, images);
     }
-    logger.debug(`Extracted ${images.length} images from ${blocks.length} blocks`);
+    logger.debug(`extractImages: after proccess - blocks: ${JSON.stringify(blocks)}, images: ${JSON.stringify(images)}`);
     return images;
   }
 
@@ -92,13 +94,35 @@ class ContentConverter {
   }
 
   private extractFromBlock(block: NotionBlock, images: ImageReference[]): void {
+    // block.url -> replace with placeholder -> convert later
+    // image.url -> original url -> download later
+
+    const placeholder = block.id; // use block id as placeholder
     const img = (block as { image?: unknown }).image;
+
     if (block.type === 'image' && isRecord(img) && this.isNotionImage(img)) {
-      const imageBlock = img;
-      const url = imageBlock.type === 'external' ? imageBlock.external?.url : imageBlock.file?.url;
-      const altText = this.toAltText(imageBlock.caption);
-      if (url) images.push({ blockId: block.id, url, altText });
+
+      let originalUrl = undefined;
+      switch (img.type) {
+        case 'external':
+          if (img.external) {
+            originalUrl = img.external.url;
+            img.external.url = placeholder; // replace with placeholder
+          }
+          break;
+        case 'file':
+          if (img.file) {
+            originalUrl = img.file.url;
+            img.file.url = placeholder; // replace with placeholder
+          }
+          break;
+      }
+
+      const altText = this.toAltText(img.caption);
+      if (originalUrl) images.push({ blockId: block.id, url: originalUrl, altText, placeholder });
     }
+
+    // Recursively check for child blocks
     const typeList = ['column_list', 'column', 'toggle', 'synced_block', 'table'];
     const ableToHaveChildren : boolean = typeList.includes(block.type);
     if (ableToHaveChildren && isRecord(block)) {

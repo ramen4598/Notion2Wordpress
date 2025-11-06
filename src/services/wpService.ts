@@ -238,19 +238,16 @@ class WordPressService {
   }
 
   // TODO: not working
+  // placeholder를 wpUrl로 교체
   async replaceImageUrls(html: string, imageMap: Map<string, string>): Promise<string> {
     let updatedHtml = html;
 
-    for (const [notionUrl, wpUrl] of imageMap.entries()) {
-      // Replace Notion signed URLs with WordPress media URLs
-      const notionUrlEscaped = notionUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(notionUrlEscaped, 'g');
+    logger.debug(`replaceImageUrls: before process - HTML: ${html} imageMap: ${JSON.stringify(Array.from(imageMap.entries()))}`);
+    for (const [placeholder, wpUrl] of imageMap.entries()) {
+      const regex = new RegExp(placeholder, 'g');
       updatedHtml = updatedHtml.replace(regex, wpUrl);
-      // show diff
-      const diff = updatedHtml.split('\n').filter((line, index) => line !== html.split('\n')[index]);
-      logger.info(`Replaced image URL in HTML`, { notionUrl, wpUrl, diff });
     }
-
+    logger.debug(`replaceImageUrls: after process - updatedHTML: ${updatedHtml}`);
     return updatedHtml;
   }
 }

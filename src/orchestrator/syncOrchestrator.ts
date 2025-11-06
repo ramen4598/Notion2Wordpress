@@ -26,6 +26,7 @@ export interface ExecuteSyncJobResponse {
 
 // TODO: 전체적으로 리팩토링 필요. 가독성 및 유지보수성 향상
 class SyncOrchestrator {
+  // TODO: 메서드가 너무 큼. 더 작은 메서드로 분리 고려
   async executeSyncJob(jobType: 'scheduled' | 'manual'): Promise<ExecuteSyncJobResponse> {
     logger.info(`Starting sync job: ${jobType}`);
 
@@ -87,6 +88,7 @@ class SyncOrchestrator {
         last_sync_timestamp: new Date().toISOString(),
       });
 
+      // TODO: telegram notification option 활성화 시
       // Send Telegram notification
       await telegramService.sendSyncNotification({
         jobId,
@@ -120,6 +122,7 @@ class SyncOrchestrator {
         error_message: error.message,
       });
 
+      // TODO: telegram notification option 활성화 시
       // Send failure notification
       await telegramService.sendSyncNotification({
         jobId,
@@ -142,6 +145,7 @@ class SyncOrchestrator {
     }
   }
 
+  // TODO: 메서드가 너무 큼. 더 작은 메서드로 분리 고려
   private async syncPage(jobId: number, page: NotionPage): Promise<void> {
     let jobItemId: number | undefined;
     let wpPostId: number | undefined;
@@ -160,6 +164,7 @@ class SyncOrchestrator {
       const blocks = await notionService.getPageBlocks(page.id);
 
       // Convert to HTML and extract images
+      // TODO: extract image url -> download & upload -> replace url -> convert to HTML 순서로 변경 
       const { html, images } = await contentConverter.convertToHTML(page.id, blocks);
 
       logger.info(`Converted page to HTML with ${images.length} images`, {
@@ -210,7 +215,7 @@ class SyncOrchestrator {
           });
 
           // Map Notion URL to WordPress URL
-          imageMap.set(image.url, media.url);
+          imageMap.set(image.placeholder, media.url);
 
           logger.info(`Uploaded image: ${filename} -> ${media.url}`);
         } catch (error: any) {
