@@ -124,11 +124,7 @@ class NotionService {
       }));
 
       // TODO: has_more, next_cursor 제거
-      return {
-        pages,
-        hasMore: response.has_more,
-        nextCursor: response.next_cursor || undefined,
-      };
+      return pages;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       logger.error('Failed to query Notion pages', { error: message });
