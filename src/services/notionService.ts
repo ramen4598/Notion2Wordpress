@@ -6,6 +6,9 @@ import { config } from '../config/index.js';
 import { logger } from '../lib/logger.js';
 import { retryWithBackoff } from '../lib/retry.js';
 import { isRecord } from '../lib/utils.js';
+import { NotionToMarkdown } from 'notion-to-md';
+import { marked } from 'marked';
+import { MdBlock } from 'notion-to-md/build/types/index.js';
 
 export interface NotionPage {
   id: string;
@@ -34,12 +37,26 @@ export interface QueryPagesResponse {
   nextCursor?: string;
 }
 
+export interface ImageReference {
+  blockId: string;
+  url: string;
+  altText?: string;
+  placeholder: string;
+}
+
+export interface getPageHTMLResponse {
+  html: string;
+  images: ImageReference[];
+}
+
 // TODO: Refactor to reduce duplication with logging code.
 class NotionService {
+  private n2m: NotionToMarkdown;
   private client: Client;
 
   constructor() {
     this.client = new Client({ auth: config.notionApiToken });
+    this.n2m = new NotionToMarkdown({ notionClient: this.client });
   }
 
   private extractPlainText(arr: unknown): string {
@@ -126,56 +143,57 @@ class NotionService {
     }
   }
 
-  private async fetchBlocksRecursively(blockId: string): Promise<NotionBlock[]> {
-    const blocks: NotionBlock[] = [];
-    let cursor: string | undefined;
+  private extractImagesRecursively(mdBlocks: MdBlock[]): ImageReference[] {
+    let images: ImageReference[] = [];
 
-    do {
-      const response = await retryWithBackoff(
-        async () => {
-          return await this.client.blocks.children.list({
-            block_id: blockId,
-            start_cursor: cursor,
-          });
-        },
-        {
-          onRetry: (error, attempt) => {
-            logger.warn(`Retrying get blocks (attempt ${attempt})`, {
-              blockId,
-              error: error.message,
-            });
-          },
-        }
-      );
+    if (!Array.isArray(mdBlocks) || mdBlocks.length === 0) return images;
 
-      const fetchedBlocks = response.results as NotionBlock[];
-      blocks.push(...fetchedBlocks);
-      cursor = response.has_more ? response.next_cursor || undefined : undefined;
-    } while (cursor);
+    for (const block of mdBlocks) {
+      if (block.type === 'image') {
+        const b = block as { parent: string; blockId: string };
+        const p = b.parent;
+        const placeholder = `image-${b.blockId}`;
 
-    // Recursively fetch children for blocks that have children
-    // Common parent blocks: column_list, column, toggle, synced_block, table, bulleted_list_item, etc.
-    for (const block of blocks) {
-      const hasChildren = (block as { has_children?: boolean }).has_children;
-      if (hasChildren) {
-        const children = await this.fetchBlocksRecursively(block.id);
-        // Attach children to the block for easier processing
-        (block as { children?: NotionBlock[] }).children = children;
+        // Extract altText and url from markdown syntax ![alt](url)
+        const imageRegex = /!\[.*?\]\((.*?)\)/g;
+        let match = imageRegex.exec(p);
+        if (!match) throw new Error(`Failed to extract image url from markdown block: ${JSON.stringify(block)}`);
+        const altText = match[0].slice(2, match[0].indexOf('](')); // 2 is length of '!['
+        const url = match[1];
+
+        // Replace url with placeholder at here!
+        block.parent = block.parent.replace(url, placeholder); 
+        images.push({ blockId: b.blockId, url, altText, placeholder });
+        logger.debug(`extractImagesRecursively: extracted image - blockId: ${b.blockId}, url: ${url}, placeholder: ${placeholder}`);
       }
+
+      const children: MdBlock[] = (block as { children?: MdBlock[] }).children || [];
+      images.push(...this.extractImagesRecursively(children));
     }
 
-    return blocks;
+    return images;
   }
 
-  async getPageBlocks(pageId: string): Promise<NotionBlock[]> {
-    try {
-      const allBlocks: NotionBlock[] = await this.fetchBlocksRecursively(pageId);
-      logger.info(`Retrieved ${allBlocks.length} blocks from page ${pageId} (including nested)`);
-      return allBlocks;
+  async getPageHTML(pageId: string): Promise<getPageHTMLResponse> {
+    try{
+      // Get MdBlock
+      const mdBlocks = await this.n2m.pageToMarkdown(pageId);
+      // Extract images and replace urls with placeholders
+      const images = this.extractImagesRecursively(mdBlocks);
+      logger.debug(`getPageHTML: mdBlocks: ${JSON.stringify(mdBlocks)}`);
+      logger.debug(`getPageHTML: images: ${JSON.stringify(images)}`);
+      // Get HTML
+      const mdString = this.n2m.toMarkdownString(mdBlocks);
+      const markdownContent = mdString.parent ?? ''; // Handle empty pages gracefully
+      const html = marked.parse(markdownContent) as string;
+      logger.debug(`getPageHTML: html: ${JSON.stringify(html)}`);
+
+      logger.info(`Retrieved HTML for page ${pageId} and images ${images.length}`);
+      return {html: html, images: images};
     } catch (error: unknown) {
-      logger.error(`Failed to get blocks for page ${pageId}`, error);
+      logger.error(`Failed to get html for page ${pageId}`, error);
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to get page blocks: ${message}`);
+      throw new Error(`Failed to get page html: ${message}`);
     }
   }
 

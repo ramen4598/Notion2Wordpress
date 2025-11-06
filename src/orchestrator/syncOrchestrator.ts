@@ -4,7 +4,6 @@ import { db } from '../db/index.js';
 import { notionService, NotionPage } from '../services/notionService.js';
 import { wpService } from '../services/wpService.js';
 import { telegramService } from '../services/telegramService.js';
-import { contentConverter } from '../lib/contentConverter.js';
 import { imageDownloader } from '../lib/imageDownloader.js';
 import { logger } from '../lib/logger.js';
 
@@ -160,12 +159,10 @@ class SyncOrchestrator {
         retry_count: 0,
       });
 
-      // Get page notion-blocks
-      const blocks = await notionService.getPageBlocks(page.id);
-
-      // Convert to HTML and extract images
-      // TODO: extract image url -> download & upload -> replace url -> convert to HTML 순서로 변경 
-      const { html, images } = await contentConverter.convertToHTML(page.id, blocks);
+      // Convert Notion page to HTML
+      // Extract images
+      // Replace image URLs with placeholders
+      const {html, images} = await notionService.getPageHTML(page.id);
 
       logger.info(`Converted page to HTML with ${images.length} images`, {
         pageId: page.id,

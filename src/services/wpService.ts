@@ -237,12 +237,11 @@ class WordPressService {
     }
   }
 
-  // TODO: not working
-  // placeholder를 wpUrl로 교체
   async replaceImageUrls(html: string, imageMap: Map<string, string>): Promise<string> {
     let updatedHtml = html;
 
-    logger.debug(`replaceImageUrls: before process - HTML: ${html} imageMap: ${JSON.stringify(Array.from(imageMap.entries()))}`);
+    logger.debug(`replaceImageUrls: before process - HTML: ${html}`);
+    logger.debug(`replaceImageUrls: before process - imageMap: ${JSON.stringify(Array.from(imageMap.entries()))}`);
     for (const [placeholder, wpUrl] of imageMap.entries()) {
       const regex = new RegExp(placeholder, 'g');
       updatedHtml = updatedHtml.replace(regex, wpUrl);
