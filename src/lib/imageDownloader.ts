@@ -46,7 +46,7 @@ class ImageDownloader {
     try {
       const response = await retryWithBackoff(fn, { onRetry: onRetryFn });
 
-      const filename = url.split('/').pop() || 'image';
+      const filename = this.getFilenameFromUrl(url);
       const buffer = Buffer.from(response.data);
       const hash = this.calculateHash(buffer);
       const contentType = response.headers['content-type'] || 'image/jpeg';
@@ -120,6 +120,15 @@ class ImageDownloader {
     } catch {
       return url.substring(0, 50) + '...';
     }
+  }
+
+  private getFilenameFromUrl(url: string): string {
+    let filename = url.split('/').pop()?.split('?')[0] || 'image';
+    const lastDot = filename.lastIndexOf('.');
+    if (lastDot > 0) {
+      filename = filename.substring(0, lastDot);
+    }
+    return decodeURIComponent(filename);
   }
 }
 
