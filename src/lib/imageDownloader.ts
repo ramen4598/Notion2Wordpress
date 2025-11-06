@@ -14,6 +14,7 @@ export interface DownloadImageOptions {
 }
 
 export interface DownloadImageResponse {
+  filename: string;
   buffer: Buffer;
   hash: string;
   contentType: string;
@@ -45,19 +46,21 @@ class ImageDownloader {
     try {
       const response = await retryWithBackoff(fn, { onRetry: onRetryFn });
 
+      const filename = url.split('/').pop() || 'image';
       const buffer = Buffer.from(response.data);
       const hash = this.calculateHash(buffer);
       const contentType = response.headers['content-type'] || 'image/jpeg';
       const size = buffer.length;
 
       logger.info('Downloaded image', {
+        filename,
         url: sanitizedUrl,
         size,
         hash,
         contentType,
       });
 
-      return { buffer, hash, contentType, size };
+      return { filename, buffer, hash, contentType, size };
     } catch (error: any) {
       logger.error('Failed to download image', {
         url: sanitizedUrl,

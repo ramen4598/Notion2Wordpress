@@ -184,14 +184,12 @@ class SyncOrchestrator {
 
           // Download image
           // TODO: downloadMultiple 사용하도록 수정. See imageDownloader.ts:96.
-          const { buffer, hash, contentType } = await imageDownloader.download({
+          const { filename: ogfname, buffer, hash, contentType } = await imageDownloader.download({
             url: image.url,
           });
 
-          // Generate filename from hash to prevent collisions
           const extension = this.getExtensionFromContentType(contentType);
-          // TODO: 기존의 filename + hash 조합 방식으로 변경 고려 - url의 마지막 path에 있는 파일명 사용
-          const filename = `${hash.substring(0, 16)}.${extension}`;
+          const filename = `${ogfname}-${hash.substring(0, 16)}.${extension}`;
 
           // Upload to WordPress
           const media = await wpService.uploadMedia({
