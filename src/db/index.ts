@@ -45,7 +45,6 @@ export interface ImageAsset {
   notion_url: string;
   wp_media_id?: number;
   wp_media_url?: string;
-  file_hash?: string;
   status: 'pending' | 'uploaded' | 'failed';
   error_message?: string;
   created_at?: string;
@@ -255,8 +254,8 @@ class DatabaseService {
     const sql = `
       INSERT INTO image_assets (
         sync_job_item_id, notion_page_id, notion_block_id, notion_url,
-        wp_media_id, wp_media_url, file_hash, status, error_message
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        wp_media_id, wp_media_url, status, error_message
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const stmt = this.db!.prepare(sql);
@@ -267,7 +266,6 @@ class DatabaseService {
       asset.notion_url,
       asset.wp_media_id,
       asset.wp_media_url,
-      asset.file_hash,
       asset.status,
       asset.error_message
     );
@@ -288,10 +286,6 @@ class DatabaseService {
     if (updates.wp_media_url) {
       fields.push('wp_media_url = ?');
       values.push(updates.wp_media_url);
-    }
-    if (updates.file_hash) {
-      fields.push('file_hash = ?');
-      values.push(updates.file_hash);
     }
     if (updates.status) {
       fields.push('status = ?');

@@ -37,7 +37,6 @@ erDiagram
       TEXT notion_url
       INTEGER wp_media_id
       TEXT wp_media_url
-      TEXT file_hash
       TEXT status
       TEXT error_message
       TEXT created_at

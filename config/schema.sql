@@ -49,7 +49,6 @@ CREATE TABLE IF NOT EXISTS image_assets (
   notion_url TEXT NOT NULL,
   wp_media_id INTEGER,
   wp_media_url TEXT,
-  file_hash TEXT,
   status TEXT NOT NULL CHECK(status IN ('pending', 'uploaded', 'failed')),
   error_message TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -58,7 +57,6 @@ CREATE TABLE IF NOT EXISTS image_assets (
 
 CREATE INDEX IF NOT EXISTS idx_sync_job_item_id ON image_assets(sync_job_item_id);
 CREATE INDEX IF NOT EXISTS idx_notion_block_id ON image_assets(notion_block_id);
-CREATE INDEX IF NOT EXISTS idx_file_hash ON image_assets(file_hash);
 
 -- 4) page_post_map: final mapping, created only after successful sync
 CREATE TABLE IF NOT EXISTS page_post_map (

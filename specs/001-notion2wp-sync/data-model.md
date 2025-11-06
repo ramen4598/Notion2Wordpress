@@ -442,7 +442,6 @@ CREATE TABLE image_assets (
   notion_url TEXT NOT NULL,
   wp_media_id INTEGER,
   wp_media_url TEXT,
-  file_hash TEXT,
   status TEXT NOT NULL CHECK(status IN ('pending', 'uploaded', 'failed')),
   error_message TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -451,7 +450,6 @@ CREATE TABLE image_assets (
 
 CREATE INDEX idx_sync_job_item_id ON image_assets(sync_job_item_id);
 CREATE INDEX idx_notion_block_id ON image_assets(notion_block_id);
-CREATE INDEX idx_file_hash ON image_assets(file_hash);
 ```
 
 **Fields**:
@@ -462,19 +460,16 @@ CREATE INDEX idx_file_hash ON image_assets(file_hash);
 - `notion_url`: Original Notion image URL (signed, temporary, **stored for retry attempts only**)
 - `wp_media_id`: WordPress media library ID (null if upload failed)
 - `wp_media_url`: Permanent WordPress media URL
-- `file_hash`: SHA-256 hash of image content (for deduplication)
 - `status`: `"pending"`, `"uploaded"`, or `"failed"`
 - `error_message`: Error details if upload failed
 - `created_at`: Timestamp
 
 **Validation Rules**:
 - `notion_url`: Must be valid URL
-- `file_hash`: 64-character hex string (SHA-256)
 - `wp_media_id`: Unique if not null
 
 **Business Rules**:
 - **Created immediately after downloading image from Notion** (during sync process)
-- File hash used to prevent duplicate uploads (same image, different block)
 - On rollback, delete WordPress media via REST API (`DELETE /wp/v2/media/{id}`)
 - **Notion image URLs expire after ~1 hour**: URL stored for retry attempts within same sync job only
 - After sync job completes, `notion_url` becomes stale but kept for debugging
@@ -542,20 +537,6 @@ Represents uploaded media in WordPress media library.
 3. Delete WPPost (external, via API)
 4. SyncJobItem remains with status=failed
 5. PagePostMap NOT created
-
----
-
-## Validation Summary
-
-| Entity | Key Constraints | Unique Fields |
-|--------|----------------|---------------|
-| NotionPage | UUID format, status enum | `id` |
-| WPPost | Non-empty title | `id` |
-| PagePostMap | Valid UUIDs/IDs | `notion_page_id`, `wp_post_id` |
-| SyncJob | Status enum, non-negative counters | `id` |
-| SyncJobItem | Status enum, retry_count ≤ 3 | `id` |
-| ImageAsset | Valid URL, SHA-256 hash | `file_hash` (optional) |
-| WPMedia | Valid MIME type | `id` |
 
 ---
 

@@ -492,7 +492,6 @@ interface DownloadImageResponse {
 **Implementation Notes**:
 - Use streaming to handle large images efficiently
 - Calculate SHA-256 hash during download (no need to re-read buffer)
-- Store hash in ImageAsset for deduplication check
 
 ---
 
@@ -566,7 +565,6 @@ interface CreateImageAssetParams {
   notionPageId: string;
   notionBlockId: string;
   notionUrl: string;            // Temporary signed URL
-  fileHash: string;             // SHA-256 hash
 }
 ```
 
@@ -582,9 +580,9 @@ interface CreateImageAssetResponse {
 ```sql
 INSERT INTO image_assets (
   sync_job_item_id, notion_page_id, notion_block_id,
-  notion_url, file_hash, status
+  notion_url, status
 )
-VALUES (?, ?, ?, ?, ?, 'pending')
+VALUES (?, ?, ?, ?, 'pending')
 RETURNING id, created_at;
 ```
 

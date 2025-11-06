@@ -205,7 +205,6 @@ class SyncOrchestrator {
           await db.updateImageAsset(assetId, {
             wp_media_id: media.id,
             wp_media_url: media.url,
-            file_hash: hash,
             status: 'uploaded',
           });
 
