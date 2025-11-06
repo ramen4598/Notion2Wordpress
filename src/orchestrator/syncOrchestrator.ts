@@ -43,7 +43,7 @@ class SyncOrchestrator {
 
       // Get pages
       // Query Notion pages with status=adding
-      const { pages } = await notionService.queryPages({
+      const pages = await notionService.queryPages({
         lastSyncTimestamp: lastSyncTimestamp || undefined,
         statusFilter: 'adding',
       });

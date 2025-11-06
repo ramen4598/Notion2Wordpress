@@ -30,13 +30,6 @@ export interface QueryPagesOptions {
   statusFilter?: 'adding';
 }
 
-// TODO: has_more, next_cursor 제거, api-contracts.md 수정
-export interface QueryPagesResponse {
-  pages: NotionPage[];
-  hasMore: boolean;
-  nextCursor?: string;
-}
-
 export interface ImageReference {
   blockId: string;
   url: string;
@@ -68,7 +61,7 @@ class NotionService {
       }).join('');
   }
 
-  async queryPages(options: QueryPagesOptions = {}): Promise<QueryPagesResponse> {
+  async queryPages(options: QueryPagesOptions = {}): Promise<NotionPage[]> {
     const { lastSyncTimestamp, statusFilter = 'adding' } = options;
 
     const statusFilterObj = {
