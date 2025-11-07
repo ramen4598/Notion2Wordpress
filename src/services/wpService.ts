@@ -240,13 +240,14 @@ class WordPressService {
   async replaceImageUrls(html: string, imageMap: Map<string, string>): Promise<string> {
     let updatedHtml = html;
 
-    logger.debug(`replaceImageUrls: before process - HTML: ${html}`);
-    logger.debug(`replaceImageUrls: before process - imageMap: ${JSON.stringify(Array.from(imageMap.entries()))}`);
+    // logger.debug(`replaceImageUrls: before process - HTML: ${html}`);
+    // logger.debug(`replaceImageUrls: before process - imageMap: ${JSON.stringify(Array.from(imageMap.entries()))}`);
     for (const [placeholder, wpUrl] of imageMap.entries()) {
       const regex = new RegExp(placeholder, 'g');
       updatedHtml = updatedHtml.replace(regex, wpUrl);
     }
-    logger.debug(`replaceImageUrls: after process - updatedHTML: ${updatedHtml}`);
+    // logger.debug(`replaceImageUrls: after process - updatedHTML: ${updatedHtml}`);
+    logger.debug(`replaceImageUrls: replaced ${imageMap.size} image URLs in HTML`);
     return updatedHtml;
   }
 }
