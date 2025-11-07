@@ -70,11 +70,19 @@ class NotionService {
     const filter = this.makeFilter(options);
     const sorts = this.makeSorts();
 
-    const fn = async () => {
+    const fn = async (has_more: boolean, start_cursor: string | null) => {
+      let body: Record<string, unknown> = {
+        filter: filter,
+        sorts: sorts,
+        page_size: 100,
+      };
+      if (has_more && start_cursor) {
+        body['start_cursor'] = start_cursor;
+      }
       return await this.client.request<pageQueryResponse>({
         path: `data_sources/${config.notionDatasourceId}/query`,
         method: 'post',
-        body: { filter, sorts },
+        body: body,
       });
     };
 
@@ -83,17 +91,27 @@ class NotionService {
     };
 
     try {
-      // TODO: pagination 처리 필요
-      const response: pageQueryResponse = await retryWithBackoff( fn, { onRetry: onRetryFn });
+      let hasMore = false;
+      let nextCursor: string | null = null;
+      const pages: NotionPage[] = [];
+      do {
+        const response = await retryWithBackoff( 
+          () => fn(hasMore, nextCursor),
+          { onRetry: onRetryFn }
+        );
+        pages.push(...(response.results as NotionRawPage[]).map((page) => ({
+          id: page.id,
+          title: this.extractTitle(page),
+          status: this.extractStatus(page),
+          lastEditedTime: page.last_edited_time,
+          createdTime: page.created_time,
+          properties: page.properties,
+        })));
 
-      const pages: NotionPage[] = (response.results as NotionRawPage[]).map((page) => ({
-        id: page.id,
-        title: this.extractTitle(page),
-        status: this.extractStatus(page),
-        lastEditedTime: page.last_edited_time,
-        createdTime: page.created_time,
-        properties: page.properties,
-      }));
+        hasMore = response.has_more;
+        nextCursor = response.next_cursor;
+        logger.debug(`queryPages: fetched ${response.results.length} pages, hasMore: ${hasMore}, nextCursor: ${nextCursor}`);
+      } while (hasMore);
 
       return pages;
     } catch (error: unknown) {
@@ -110,13 +128,13 @@ class NotionService {
       const mdBlocks = await this.n2m.pageToMarkdown(pageId);
       // Extract images and replace urls with placeholders
       const images = this.extractImagesRecursively(mdBlocks);
-      logger.debug(`getPageHTML: mdBlocks: ${JSON.stringify(mdBlocks)}`);
-      logger.debug(`getPageHTML: images: ${JSON.stringify(images)}`);
+      // logger.debug(`getPageHTML: mdBlocks: ${JSON.stringify(mdBlocks)}`);
+      // logger.debug(`getPageHTML: images: ${JSON.stringify(images)}`);
       // Get HTML
       const mdString = this.n2m.toMarkdownString(mdBlocks);
       const markdownContent = mdString.parent ?? ''; // Handle empty pages gracefully
       const html = marked.parse(markdownContent) as string;
-      logger.debug(`getPageHTML: html: ${JSON.stringify(html)}`);
+      // logger.debug(`getPageHTML: html: ${JSON.stringify(html)}`);
 
       logger.info(`Retrieved HTML for page ${pageId} and images ${images.length}`);
       return {html: html, images: images};
