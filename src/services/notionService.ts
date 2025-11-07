@@ -48,7 +48,6 @@ export interface getPageHTMLResponse {
   images: ImageReference[];
 }
 
-// TODO: Refactor to reduce duplication with logging code.
 class NotionService {
   private n2m: NotionToMarkdown;
   private client: Client;
@@ -123,18 +122,25 @@ class NotionService {
 
   // TODO: retryWithBackoff 적용 필요
   async getPageHTML(pageId: string): Promise<getPageHTMLResponse> {
+
+    const onRetryFn = (error: Error, attempt: number) => {
+      logger.warn(`Get Notion page HTML (attempt ${attempt})`, { error: error.message });
+    };
+
     try{
       // Get MdBlock
-      const mdBlocks = await this.n2m.pageToMarkdown(pageId);
+      const mdBlocks = await retryWithBackoff(
+        () => this.n2m.pageToMarkdown(pageId),
+        { onRetry: onRetryFn }
+      );
+
       // Extract images and replace urls with placeholders
       const images = this.extractImagesRecursively(mdBlocks);
-      // logger.debug(`getPageHTML: mdBlocks: ${JSON.stringify(mdBlocks)}`);
-      // logger.debug(`getPageHTML: images: ${JSON.stringify(images)}`);
+
       // Get HTML
       const mdString = this.n2m.toMarkdownString(mdBlocks);
       const markdownContent = mdString.parent ?? ''; // Handle empty pages gracefully
       const html = marked.parse(markdownContent) as string;
-      // logger.debug(`getPageHTML: html: ${JSON.stringify(html)}`);
 
       logger.info(`Retrieved HTML for page ${pageId} and images ${images.length}`);
       return {html: html, images: images};

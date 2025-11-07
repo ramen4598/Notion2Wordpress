@@ -87,7 +87,6 @@ class SyncOrchestrator {
         last_sync_timestamp: new Date().toISOString(),
       });
 
-      // TODO: telegram notification option 활성화 시
       // Send Telegram notification
       await telegramService.sendSyncNotification({
         jobId,
@@ -121,7 +120,6 @@ class SyncOrchestrator {
         error_message: error.message,
       });
 
-      // TODO: telegram notification option 활성화 시
       // Send failure notification
       await telegramService.sendSyncNotification({
         jobId,
