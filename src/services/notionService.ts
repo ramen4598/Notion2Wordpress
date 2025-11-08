@@ -153,16 +153,16 @@ class NotionService {
 
   async updatePageStatus(
     pageId: string,
-    status: 'complete' | 'error'
+    updateStatus: NotionPageStatus.Complete | NotionPageStatus.Error
   ): Promise<{ success: boolean; updatedTime: string }> {
 
     const fn = async () => {
       return await this.client.pages.update({
         page_id: pageId,
         properties: {
-          status: { // status property
+          [config.notionPageStatusProperty]: {
             status: {
-              name: status, // 'complete' or 'error'
+              name: updateStatus,
             },
           },
         },
@@ -172,14 +172,14 @@ class NotionService {
     const onRetryFn = (error: Error, attempt: number) => {
       logger.warn(`Retrying update page status (attempt ${attempt})`, {
         pageId,
-        status,
+        status: updateStatus,
         error: error.message,
       });
     };
 
     try {
       const response = await retryWithBackoff(fn, {onRetry: onRetryFn});
-      logger.info(`Updated page ${pageId} status to: ${status}`);
+      logger.info(`Updated page ${pageId} status to: ${updateStatus}`);
       type UpdatePageResponse = { last_edited_time: string };
       return {
         success: true,
@@ -218,18 +218,16 @@ class NotionService {
     return text || 'Untitled';
   }
 
-  // TODO: notion property name status 환경변수로 관리하도록 수정
   private extractStatus(page: { properties?: Record<string, unknown> } | unknown): NotionPageStatus {
     if (!isRecord(page)) return NotionPageStatus.Writing;
     const props = page.properties as Record<string, unknown> | undefined;
     if (!props) return NotionPageStatus.Writing;
-    const statusProp = (props['status'] ?? props['Status']) as unknown;
+    const statusProp = (props[config.notionPageStatusProperty]) as unknown;
     if (!isRecord(statusProp)) return NotionPageStatus.Writing;
     const select = statusProp['select'];
     if (!isRecord(select)) return NotionPageStatus.Writing;
     const name = select['name'];
     if (typeof name !== 'string') return NotionPageStatus.Writing;
-    // if (name === 'writing' || name === 'adding' || name === 'complete' || name === 'error') return name;
     if (Object.values(NotionPageStatus).includes(name as NotionPageStatus)) {
       return name as NotionPageStatus;
     }
@@ -267,12 +265,11 @@ class NotionService {
     return images;
   }
 
-  // TODO: notion property name status 환경변수로 관리하도록 수정
   private makeFilter(options: QueryPagesOptions): Record<string, unknown> {
     const { lastSyncTimestamp, statusFilter = NotionPageStatus.Adding } = options;
 
     const propertyFilter = {
-      "property": "status",
+      "property": config.notionPageStatusProperty,
       "status": { "equals": statusFilter },
     };
     const timestampFilter = {

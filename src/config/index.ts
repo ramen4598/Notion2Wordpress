@@ -18,6 +18,7 @@ export interface Config {
   // Notion
   notionApiToken: string;
   notionDatasourceId: string;
+  notionPageStatusProperty: string;
 
   // WordPress
   wpApiUrl: string;
@@ -80,6 +81,7 @@ export const config: Config = {
   // Notion
   notionApiToken: getEnv('NOTION_API_TOKEN'),
   notionDatasourceId: getEnv('NOTION_DATASOURCE_ID'),
+  notionPageStatusProperty: getEnv('NOTION_PAGE_PROPERTY_NAME', 'status'),
 
   // WordPress
   wpApiUrl: getEnv('WP_API_URL'),

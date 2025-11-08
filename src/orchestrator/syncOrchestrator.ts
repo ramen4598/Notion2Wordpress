@@ -118,7 +118,6 @@ class SyncOrchestrator {
     }
   }
 
-  // TODO: 일부 리터럴을 type 또는 enum으로 대체 고려
   // TODO: 메서드가 너무 큼. 더 작은 메서드로 분리 고려
   private async syncPage(jobId: number, page: NotionPage): Promise<void> {
     let jobItemId: number | undefined;
@@ -217,7 +216,7 @@ class SyncOrchestrator {
       });
 
       // Update Notion page status to complete
-      await notionService.updatePageStatus(page.id, 'complete');
+      await notionService.updatePageStatus(page.id, NPStatus.Complete);
 
       // Mark job item as success
       await db.updateSyncJobItem(jobItemId, {
