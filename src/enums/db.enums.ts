@@ -1,4 +1,3 @@
-// TODO: enum들 간의 표현 방식 통일 고려
 export enum JobType {
     Scheduled = 'scheduled',
     Manual = 'manual',

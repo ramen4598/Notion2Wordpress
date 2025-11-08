@@ -215,8 +215,8 @@ class SyncOrchestrator {
         wp_post_id: post.id,
       });
 
-      // Update Notion page status to complete
-      await notionService.updatePageStatus(page.id, NPStatus.Complete);
+      // Update Notion page status to done
+      await notionService.updatePageStatus(page.id, NPStatus.Done);
 
       // Mark job item as success
       await db.updateSyncJobItem(jobItemId, {

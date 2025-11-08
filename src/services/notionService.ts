@@ -153,7 +153,7 @@ class NotionService {
 
   async updatePageStatus(
     pageId: string,
-    updateStatus: NotionPageStatus.Complete | NotionPageStatus.Error
+    updateStatus: NotionPageStatus.Done | NotionPageStatus.Error
   ): Promise<{ success: boolean; updatedTime: string }> {
 
     const fn = async () => {
