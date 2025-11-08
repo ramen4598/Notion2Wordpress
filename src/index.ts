@@ -5,6 +5,7 @@ import { config } from './config/index.js';
 import { logger } from './lib/logger.js';
 import { db } from './db/index.js';
 import { syncOrchestrator } from './orchestrator/syncOrchestrator.js';
+import { JobType } from './enums/db.enums.js';
 
 async function main() {
   logger.info('Starting Notion2WordPress Sync Service');
@@ -20,9 +21,10 @@ async function main() {
     cron.schedule(config.syncSchedule, async () => {
       logger.info('Scheduled sync job triggered');
       try {
-        const result = await syncOrchestrator.executeSyncJob('scheduled');
+        const result = await syncOrchestrator.executeSyncJob(JobType.Scheduled);
         logger.info('Scheduled sync completed', {
           jobId: result.jobId,
+          JobType: result.jobType,
           status: result.status,
           pagesProcessed: result.pagesProcessed,
           pagesSucceeded: result.pagesSucceeded,

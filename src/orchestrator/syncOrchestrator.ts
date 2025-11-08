@@ -6,142 +6,118 @@ import { wpService } from '../services/wpService.js';
 import { telegramService } from '../services/telegramService.js';
 import { imageDownloader } from '../lib/imageDownloader.js';
 import { logger } from '../lib/logger.js';
+import { JobType, JobStatus, JobItemStatus, ImageAssetStatus } from '../enums/db.enums.js';
+import { NotionPageStatus as NPStatus } from '../enums/notion.enums.js';
 
-export interface SyncError {
+type SyncError = {
   notionPageId: string;
   pageTitle: string;
   errorMessage: string;
-  retryCount: number;
-}
+};
 
-export interface ExecuteSyncJobResponse {
+export type SyncJob = {
   jobId: number;
-  status: 'completed' | 'failed';
+  jobType: JobType;
+  status: JobStatus;
   pagesProcessed: number;
   pagesSucceeded: number;
   pagesFailed: number;
   errors: SyncError[];
 }
 
-// TODO: 전체적으로 리팩토링 필요. 가독성 및 유지보수성 향상
+export type ExecuteSyncJobResponse = SyncJob & {
+  status: Exclude<JobStatus, JobStatus.Running>;
+};
+
 class SyncOrchestrator {
+
   // TODO: 메서드가 너무 큼. 더 작은 메서드로 분리 고려
-  async executeSyncJob(jobType: 'scheduled' | 'manual'): Promise<ExecuteSyncJobResponse> {
+  async executeSyncJob(jobType: JobType): Promise<ExecuteSyncJobResponse> {
     logger.info(`Starting sync job: ${jobType}`);
 
-    // Create sync job
-    const jobId = await db.createSyncJob(jobType);
-    const errors: SyncError[] = [];
-    let pagesProcessed = 0;
-    let pagesSucceeded = 0;
-    let pagesFailed = 0;
+    const syncJob: SyncJob = await this.createSyncJob(jobType);
 
     try {
       // Get last sync timestamp for incremental scanning
       const lastSyncTimestamp = await db.getLastSyncTimestamp();
       logger.info('Querying Notion pages', { lastSyncTimestamp });
 
-      // Get pages
-      // Query Notion pages with status=adding
+      // Get pages - Query Notion pages with status=adding
       const pages = await notionService.queryPages({
         lastSyncTimestamp: lastSyncTimestamp || undefined,
-        statusFilter: 'adding',
+        statusFilter: NPStatus.Adding,
       });
 
       logger.info(`Found ${pages.length} pages to sync`);
 
       for (const page of pages) {
-        pagesProcessed++;
-        logger.info(`Processing page ${pagesProcessed}/${pages.length}: ${page.title}`, {
+        syncJob.pagesProcessed++;
+        logger.info(`Processing page ${syncJob.pagesProcessed}/${pages.length}: ${page.title}`, {
           pageId: page.id,
         });
 
         // Sync each page
         try {
-          await this.syncPage(jobId, page);
-          pagesSucceeded++;
+          await this.syncPage(syncJob.jobId, page);
+          syncJob.pagesSucceeded++;
           logger.info(`Successfully synced page: ${page.title}`);
         } catch (error: any) {
-          pagesFailed++;
+          syncJob.pagesFailed++;
           const syncError: SyncError = {
             notionPageId: page.id,
             pageTitle: page.title,
             errorMessage: error.message,
-            retryCount: 0,
           };
-          errors.push(syncError);
+          syncJob.errors.push(syncError);
           logger.error(`Failed to sync page: ${page.title}`, error);
         }
 
         // Update job progress
-        await db.updateSyncJob(jobId, {
-          pages_processed: pagesProcessed,
-          pages_succeeded: pagesSucceeded,
-          pages_failed: pagesFailed,
+        await db.updateSyncJob(syncJob.jobId, {
+          pages_processed: syncJob.pagesProcessed,
+          pages_succeeded: syncJob.pagesSucceeded,
+          pages_failed: syncJob.pagesFailed,
         });
       }
 
-      // Mark job as completed
-      await db.updateSyncJob(jobId, {
-        status: pagesFailed === 0 ? 'completed' : 'failed',
+      syncJob.status = syncJob.pagesFailed === 0 ? JobStatus.Completed : JobStatus.Failed;
+
+      await db.updateSyncJob(syncJob.jobId, {
+        status: syncJob.status,
         last_sync_timestamp: new Date().toISOString(),
       });
 
-      // Send Telegram notification
-      await telegramService.sendSyncNotification({
-        jobId,
-        jobType,
-        status: pagesFailed === 0 ? 'success' : 'failure',
-        pagesProcessed,
-        pagesSucceeded,
-        pagesFailed,
-        errors,
+      await this.sendTelegramNotification(syncJob);
+
+      logger.info(`Sync job ${syncJob.jobId} completed`, {
+        pagesProcessed: syncJob.pagesProcessed,
+        pagesSucceeded: syncJob.pagesSucceeded,
+        pagesFailed: syncJob.pagesFailed,
       });
 
-      logger.info(`Sync job ${jobId} completed`, {
-        pagesProcessed,
-        pagesSucceeded,
-        pagesFailed,
-      });
-
-      return {
-        jobId,
-        status: pagesFailed === 0 ? 'completed' : 'failed',
-        pagesProcessed,
-        pagesSucceeded,
-        pagesFailed,
-        errors,
-      };
-    } catch (error: any) {
+      return syncJob as ExecuteSyncJobResponse;
+    } catch (error: any) { // TODO: error 타입 개선
       // Handle sync job failure, not individual sync job item failures.
-      // Fatal error - mark job as failed
-      await db.updateSyncJob(jobId, {
-        status: 'failed',
+      syncJob.status = JobStatus.Failed;
+      syncJob.errors = [{
+        notionPageId: 'N/A',
+        pageTitle: 'Fatal Error',
+        errorMessage: error.message,
+      }];
+
+      await db.updateSyncJob(syncJob.jobId, {
+        status: syncJob.status,
         error_message: error.message,
       });
 
-      // Send failure notification
-      await telegramService.sendSyncNotification({
-        jobId,
-        jobType,
-        status: 'failure',
-        pagesProcessed,
-        pagesSucceeded,
-        pagesFailed,
-        errors: [
-          {
-            notionPageId: 'N/A',
-            pageTitle: 'Fatal Error',
-            errorMessage: error.message,
-          },
-        ],
-      });
+      await this.sendTelegramNotification(syncJob);
 
-      logger.error(`Sync job ${jobId} failed with fatal error`, error);
+      logger.error(`Sync job ${syncJob.jobId} failed with fatal error`, error);
       throw error;
     }
   }
 
+  // TODO: 일부 리터럴을 type 또는 enum으로 대체 고려
   // TODO: 메서드가 너무 큼. 더 작은 메서드로 분리 고려
   private async syncPage(jobId: number, page: NotionPage): Promise<void> {
     let jobItemId: number | undefined;
@@ -153,13 +129,12 @@ class SyncOrchestrator {
       jobItemId = await db.createSyncJobItem({
         sync_job_id: jobId,
         notion_page_id: page.id,
-        status: 'pending',
-        retry_count: 0,
+        status: JobItemStatus.Pending,
+        retry_count: 0, // TODO: retry_count 구현 필요
       });
 
       // Convert Notion page to HTML
-      // Extract images
-      // Replace image URLs with placeholders
+      // Extract images, Replace image URLs with placeholders
       const {html, images} = await notionService.getPageHTML(page.id);
 
       logger.info(`Converted page to HTML with ${images.length} images`, {
@@ -177,11 +152,11 @@ class SyncOrchestrator {
             notion_page_id: page.id,
             notion_block_id: image.blockId,
             notion_url: image.url,
-            status: 'pending',
+            status: ImageAssetStatus.Pending,
           });
 
           // Download image
-          // TODO: downloadMultiple 사용하도록 수정. See imageDownloader.ts:96.
+          // TODO: downloadMultiple 사용하도록 수정
           const { filename: ogfname, buffer, hash, contentType } = await imageDownloader.download({
             url: image.url,
           });
@@ -203,7 +178,7 @@ class SyncOrchestrator {
           await db.updateImageAsset(assetId, {
             wp_media_id: media.id,
             wp_media_url: media.url,
-            status: 'uploaded',
+            status: ImageAssetStatus.Uploaded,
           });
 
           // Map Notion URL to WordPress URL
@@ -245,7 +220,7 @@ class SyncOrchestrator {
 
       // Mark job item as success
       await db.updateSyncJobItem(jobItemId, {
-        status: 'success',
+        status: JobItemStatus.Success,
       });
 
       logger.info(`Successfully created WordPress post ${post.id} for page ${page.id}`);
@@ -304,7 +279,7 @@ class SyncOrchestrator {
     if (jobItemId) {
       try {
         await db.updateSyncJobItem(jobItemId, {
-          status: 'failed',
+          status: JobItemStatus.Failed,
           error_message: errorMessage,
         });
       } catch (error: any) {
@@ -324,6 +299,35 @@ class SyncOrchestrator {
     };
 
     return extensions[contentType] || 'jpg';
+  }
+
+  private async sendTelegramNotification(syncJob: SyncJob): Promise<void> {
+    await telegramService.sendSyncNotification({
+      jobId: syncJob.jobId,
+      jobType: syncJob.jobType,
+      status: syncJob.status,
+      pagesProcessed: syncJob.pagesProcessed,
+      pagesSucceeded: syncJob.pagesSucceeded,
+      pagesFailed: syncJob.pagesFailed,
+      errors: syncJob.errors,
+    });
+  }
+
+  private async createSyncJob(jobType: JobType): Promise<SyncJob> {
+    try {
+      return {
+        jobId: await db.createSyncJob(jobType),
+        jobType: jobType,
+        status: JobStatus.Running,
+        pagesProcessed: 0,
+        pagesSucceeded: 0,
+        pagesFailed: 0,
+        errors: [],
+      };
+    } catch (error) {
+      logger.error('Failed to create sync job', error);
+      throw error;
+    }
   }
 }
 

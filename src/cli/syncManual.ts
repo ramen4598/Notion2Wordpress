@@ -6,6 +6,8 @@
 import { logger } from '../lib/logger.js';
 import { db } from '../db/index.js';
 import { syncOrchestrator } from '../orchestrator/syncOrchestrator.js';
+import { JobType } from '../enums/db.enums.js';
+import { JobStatus } from '../enums/db.enums.js';
 
 async function main() {
   logger.info('Starting manual sync job');
@@ -15,11 +17,12 @@ async function main() {
     await db.initialize();
 
     // Execute manual sync
-    const result = await syncOrchestrator.executeSyncJob('manual');
+    const result = await syncOrchestrator.executeSyncJob(JobType.Manual);
 
     // Log results
     logger.info('Manual sync completed', {
       jobId: result.jobId,
+      JobType: result.jobType,
       status: result.status,
       pagesProcessed: result.pagesProcessed,
       pagesSucceeded: result.pagesSucceeded,
@@ -37,7 +40,7 @@ async function main() {
     await db.close();
 
     // Exit with appropriate code
-    process.exit(result.status === 'completed' ? 0 : 1);
+    process.exit(result.status === JobStatus.Completed ? 0 : 1);
   } catch (error) {
     logger.error('Manual sync failed', error);
     await db.close();

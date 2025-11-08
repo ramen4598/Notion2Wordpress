@@ -7,6 +7,7 @@ import { logger } from '../lib/logger.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { JobType, JobStatus, JobItemStatus, ImageAssetStatus } from '../enums/db.enums.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,8 +15,8 @@ const DEFAULT_SCHEMA_PATH = path.resolve(__dirname, '../../config/schema.sql');
 
 export interface SyncJob {
   id?: number;
-  job_type: 'scheduled' | 'manual';
-  status: 'running' | 'completed' | 'failed';
+  job_type: JobType;
+  status: JobStatus;
   started_at?: string;
   completed_at?: string;
   error_message?: string;
@@ -30,7 +31,7 @@ export interface SyncJobItem {
   sync_job_id: number;
   notion_page_id: string;
   wp_post_id?: number;
-  status: 'pending' | 'success' | 'failed';
+  status: JobItemStatus;
   error_message?: string;
   retry_count: number;
   created_at?: string;
@@ -45,7 +46,7 @@ export interface ImageAsset {
   notion_url: string;
   wp_media_id?: number;
   wp_media_url?: string;
-  status: 'pending' | 'uploaded' | 'failed';
+  status: ImageAssetStatus;
   error_message?: string;
   created_at?: string;
 }
@@ -112,11 +113,11 @@ class DatabaseService {
   async createSyncJob(jobType: 'scheduled' | 'manual'): Promise<number> {
     const sql = `
       INSERT INTO sync_jobs (job_type, status, pages_processed, pages_succeeded, pages_failed)
-      VALUES (?, 'running', 0, 0, 0)
+      VALUES (?, ?, 0, 0, 0)
     `;
 
     const stmt = this.db!.prepare(sql);
-    const info = stmt.run(jobType);
+    const info = stmt.run(jobType, JobStatus.Running);
     const id = Number(info.lastInsertRowid);
     logger.info(`Created sync job with ID: ${id}`);
     return id;
@@ -132,7 +133,7 @@ class DatabaseService {
     if (updates.status) {
       fields.push('status = ?');
       values.push(updates.status);
-      if (updates.status === 'completed' || updates.status === 'failed') {
+      if (updates.status === JobStatus.Completed || updates.status === JobStatus.Failed) {
         fields.push("completed_at = datetime('now')");
       }
     }
@@ -184,13 +185,13 @@ class DatabaseService {
     const sql = `
       SELECT last_sync_timestamp
       FROM sync_jobs
-      WHERE status = 'completed' AND last_sync_timestamp IS NOT NULL
+      WHERE status = ? AND last_sync_timestamp IS NOT NULL
       ORDER BY completed_at DESC
       LIMIT 1
     `;
 
     try {
-      const row = this.db!.prepare(sql).get() as { last_sync_timestamp: string } | undefined;
+      const row = this.db!.prepare(sql).get(JobStatus.Completed) as { last_sync_timestamp: string } | undefined;
       return row?.last_sync_timestamp ?? null;
     } catch (err) {
       logger.error('Failed to get last sync timestamp', err);

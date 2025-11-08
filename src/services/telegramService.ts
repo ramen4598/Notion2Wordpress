@@ -3,20 +3,8 @@
 import { Telegraf } from 'telegraf';
 import { config } from '../config/index.js';
 import { logger } from '../lib/logger.js';
-
-export interface NotificationOptions {
-  jobId: number;
-  jobType: 'scheduled' | 'manual';
-  status: 'success' | 'failure';
-  pagesProcessed: number;
-  pagesSucceeded: number;
-  pagesFailed: number;
-  errors?: Array<{
-    notionPageId: string;
-    pageTitle: string;
-    errorMessage: string;
-  }>;
-}
+import { SyncJob } from '../orchestrator/syncOrchestrator.js';
+import { JobStatus } from '../enums/db.enums.js';
 
 class TelegramService {
   private bot: Telegraf | null;
@@ -45,26 +33,18 @@ class TelegramService {
     this.chatId = config.telegramChatId;
   }
 
-  async sendSyncNotification(options: NotificationOptions): Promise<void> {
+  async sendSyncNotification(syncJob: SyncJob): Promise<void> {
     if (!this.checkConfigured()) return;
 
-    const { jobId, jobType, status, pagesProcessed, pagesSucceeded, pagesFailed, errors } = options;
-    const message = this.formatNotificationMessage({
-      jobId,
-      jobType,
-      status,
-      pagesProcessed,
-      pagesSucceeded,
-      pagesFailed,
-      errors,
-    });
+    const { jobId, status } = syncJob;
+    const message = this.formatNotificationMessage(syncJob);
 
     try {
       await this.bot!.telegram.sendMessage(this.chatId!, message, {
         parse_mode: 'Markdown',
         link_preview_options: { is_disabled: true },
       });
-      logger.info(`Sent Telegram notification for job ${jobId}`, { status });
+      logger.info(`Sent Telegram notification for job ${jobId} : ${status}`);
     } catch (error) {
       logger.error('Failed to send Telegram notification', {
         jobId,
@@ -74,12 +54,12 @@ class TelegramService {
     }
   }
 
-  private formatNotificationMessage(options: NotificationOptions): string {
+  private formatNotificationMessage(syncJob: SyncJob): string {
     const { jobId, jobType, status, pagesProcessed, pagesSucceeded, pagesFailed, errors } =
-      options;
+      syncJob;
 
-    const emoji = status === 'success' ? '✅' : '❌';
-    const statusText = status === 'success' ? 'COMPLETED' : 'FAILED';
+    const emoji = status === JobStatus.Completed ? '✅' : '❌';
+    const statusText = status === JobStatus.Completed ? 'Completed' : 'Failed';
 
     let message = `${emoji} *Notion→WordPress Sync ${statusText}*\n\n`;
     message += `*Job ID:* ${jobId}\n`;
@@ -88,7 +68,7 @@ class TelegramService {
     message += `*Succeeded:* ${pagesSucceeded}\n`;
     message += `*Failed:* ${pagesFailed}\n`;
 
-    if (status === 'failure' && errors && errors.length > 0) {
+    if (status === JobStatus.Failed && errors && errors.length > 0) {
       message += `\n*Errors:*\n`;
       const maxErrors = 5; // Limit to avoid message being too long
       const displayErrors = errors.slice(0, maxErrors);
