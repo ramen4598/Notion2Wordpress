@@ -1,6 +1,7 @@
 // Description: Utility functions for retrying operations with exponential backoff
 
 import { logger } from './logger.js';
+import { config } from '../config/index.js';
 
 export interface RetryOptions {
   maxAttempts?: number;
@@ -14,24 +15,12 @@ export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   options: RetryOptions = {}
 ): Promise<T> {
-  const getNum = (value: string | undefined, fallback: number) => {
-    if (!value) return fallback;
-    const n = parseInt(value, 10);
-    return Number.isFinite(n) ? n : fallback;
-  };
-
-  const defaults = {
-    maxAttempts: getNum(process.env.MAX_RETRY_ATTEMPTS, 3),
-    initialDelayMs: getNum(process.env.RETRY_INITIAL_DELAY_MS, 1000),
-    maxDelayMs: getNum(process.env.RETRY_MAX_DELAY_MS, 30000),
-    backoffMultiplier: getNum(process.env.RETRY_BACKOFF_MULTIPLIER, 2),
-  } as const; // "as const" to make properties readonly
 
   const {
-    maxAttempts = defaults.maxAttempts,
-    initialDelayMs = defaults.initialDelayMs,
-    maxDelayMs = defaults.maxDelayMs,
-    backoffMultiplier = defaults.backoffMultiplier,
+    maxAttempts = config.maxRetryAttempts,
+    initialDelayMs = config.retryInitialDelayMs,
+    maxDelayMs = config.retryMaxDelayMs,
+    backoffMultiplier = config.retryBackoffMultiplier,
     onRetry,
   } = options;
 

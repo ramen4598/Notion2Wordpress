@@ -46,6 +46,8 @@ export interface Config {
   // Retry
   maxRetryAttempts: number;
   retryInitialDelayMs: number;
+  retryMaxDelayMs: number;
+  retryBackoffMultiplier: number;
 }
 
 function getEnv(key: string, defaultValue?: string): string {
@@ -109,4 +111,6 @@ export const config: Config = {
   // Retry
   maxRetryAttempts: getEnvNumber('MAX_RETRY_ATTEMPTS', 3),
   retryInitialDelayMs: getEnvNumber('RETRY_INITIAL_DELAY_MS', 1000),
+  retryMaxDelayMs: getEnvNumber('RETRY_MAX_DELAY_MS', 30000),
+  retryBackoffMultiplier: getEnvNumber('RETRY_BACKOFF_MULTIPLIER', 2),
 };
