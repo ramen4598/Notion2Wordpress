@@ -130,7 +130,6 @@ class SyncOrchestrator {
         sync_job_id: jobId,
         notion_page_id: page.id,
         status: JobItemStatus.Pending,
-        retry_count: 0, // TODO: retry_count 구현 필요
       });
 
       // Convert Notion page to HTML

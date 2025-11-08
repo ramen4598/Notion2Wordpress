@@ -31,7 +31,6 @@ CREATE TABLE IF NOT EXISTS sync_job_items (
   wp_post_id INTEGER,
   status TEXT NOT NULL CHECK(status IN ('pending', 'success', 'failed')),
   error_message TEXT,
-  retry_count INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (sync_job_id) REFERENCES sync_jobs(id) ON DELETE CASCADE

@@ -33,7 +33,6 @@ export interface SyncJobItem {
   wp_post_id?: number;
   status: JobItemStatus;
   error_message?: string;
-  retry_count: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -204,8 +203,8 @@ class DatabaseService {
     item: Omit<SyncJobItem, 'id' | 'created_at' | 'updated_at'>
   ): Promise<number> {
     const sql = `
-      INSERT INTO sync_job_items (sync_job_id, notion_page_id, wp_post_id, status, retry_count)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO sync_job_items (sync_job_id, notion_page_id, wp_post_id, status)
+      VALUES (?, ?, ?, ?)
     `;
 
     const stmt = this.db!.prepare(sql);
@@ -214,7 +213,6 @@ class DatabaseService {
       item.notion_page_id,
       item.wp_post_id,
       item.status,
-      item.retry_count
     );
     return Number(info.lastInsertRowid);
   }
@@ -237,10 +235,6 @@ class DatabaseService {
     if (updates.error_message !== undefined) {
       fields.push('error_message = ?');
       values.push(updates.error_message);
-    }
-    if (updates.retry_count !== undefined) {
-      fields.push('retry_count = ?');
-      values.push(updates.retry_count);
     }
 
     const sql = `UPDATE sync_job_items SET ${fields.join(', ')} WHERE id = ?`;
