@@ -31,8 +31,6 @@ export interface UploadMediaResponse {
   mimeType: string;
 }
 
-// TODO: Refactor to reduce duplication with logging code in retryWithBackoff calls
-
 class WordPressService {
   private client: AxiosInstance;
 
@@ -63,9 +61,7 @@ class WordPressService {
     };
 
     const onRetryFn = (error: Error, attempt: number) => {
-      const errorMsg = isAxiosError(error) 
-        ? `${error.message} (${error.response?.status || 'unknown'})`
-        : error.message;
+      const errorMsg = this.getAxiosErrorMessage(error);
       logger.warn(`Retrying WordPress post creation (attempt ${attempt})`, {
         title,
         error: errorMsg,
@@ -94,12 +90,7 @@ class WordPressService {
         status: post.status,
       };
     } catch (error: unknown) {
-      let message: string;
-      if (isAxiosError(error)) {
-        message = `${error.message}${error.response?.status ? ` (HTTP ${error.response.status})` : ''}`;
-      } else {
-        message = error instanceof Error ? error.message : String(error);
-      }
+      const message = this.getAxiosErrorMessage(error);
       logger.error('Failed to create WordPress post', { title, error: message });
       throw new Error(`WordPress post creation failed: ${message}`);
     }
@@ -133,9 +124,7 @@ class WordPressService {
     };
 
     const onRetryFn = (error: Error, attempt: number) => {
-      const errorMsg = isAxiosError(error)
-        ? `${error.message} (${error.response?.status || 'unknown'})`
-        : error.message;
+      const errorMsg = this.getAxiosErrorMessage(error);
       logger.warn(`Retrying WordPress media upload (attempt ${attempt})`, {
         filename,
         error: errorMsg,
@@ -159,12 +148,7 @@ class WordPressService {
         mimeType: response.mime_type,
       };
     } catch (error: unknown) {
-      let message: string;
-      if (isAxiosError(error)) {
-        message = `${error.message}${error.response?.status ? ` (HTTP ${error.response.status})` : ''}`;
-      } else {
-        message = error instanceof Error ? error.message : String(error);
-      }
+      const message = this.getAxiosErrorMessage(error);
       logger.error('Failed to upload media to WordPress', { filename, error: message });
       throw new Error(`WordPress media upload failed: ${message}`);
     }
@@ -179,9 +163,7 @@ class WordPressService {
     };
 
     const onRetryFn = (error: Error, attempt: number) => {
-      const errorMsg = isAxiosError(error)
-        ? `${error.message} (${error.response?.status || 'unknown'})`
-        : error.message;
+      const errorMsg = this.getAxiosErrorMessage(error);
       logger.warn(`Retrying WordPress post deletion (attempt ${attempt})`, {
         postId,
         error: errorMsg,
@@ -193,12 +175,7 @@ class WordPressService {
       logger.info(`Deleted WordPress post: ${postId}`);
     } catch (error: unknown) {
       logger.error(`Failed to delete WordPress post ${postId}`, error);
-      let message: string;
-      if (isAxiosError(error)) {
-        message = `${error.message}${error.response?.status ? ` (HTTP ${error.response.status})` : ''}`;
-      } else {
-        message = error instanceof Error ? error.message : String(error);
-      }
+      const message = this.getAxiosErrorMessage(error);
       throw new Error(`WordPress post deletion failed: ${message}`);
     }
   }
@@ -211,11 +188,8 @@ class WordPressService {
       return res.data;
     };
     
-    // TODO: 모든 isAxiosError 부분 찾아서 삭제
     const onRetryFn = (error: Error, attempt: number) => {
-      const errorMsg = isAxiosError(error)
-        ? `${error.message} (${error.response?.status || 'unknown'})`
-        : error instanceof Error ? error.message : String(error);
+      const errorMsg = this.getAxiosErrorMessage(error);
       logger.warn(`Retrying WordPress media deletion (attempt ${attempt})`, {
         mediaId,
         error: errorMsg,
@@ -225,14 +199,9 @@ class WordPressService {
     try {
       await retryWithBackoff(fn, { onRetry: onRetryFn });
       logger.info(`Deleted WordPress media: ${mediaId}`);
-    } catch (error: unknown) { // TODO: 모든 error: unknown 부분 찾아서 수정
+    } catch (error: unknown) {
       logger.warn(`Failed to delete WordPress media ${mediaId}`, error);
-      let message: string;
-      if (isAxiosError(error)) {
-        message = `${error.message}${error.response?.status ? ` (HTTP ${error.response.status})` : ''}`;
-      } else {
-        message = error instanceof Error ? error.message : String(error);
-      }
+      const message = this.getAxiosErrorMessage(error);
       throw new Error(`WordPress media deletion failed: ${message}`);
     }
   }
@@ -250,6 +219,14 @@ class WordPressService {
     logger.debug(`replaceImageUrls: replaced ${imageMap.size} image URLs in HTML`);
     return updatedHtml;
   }
+
+  private getAxiosErrorMessage(error: unknown): string {
+    if (isAxiosError(error)) {
+      return `${error.message}${error.response?.status ? ` (HTTP ${error.response.status})` : ''}`;
+    } else {
+      return error instanceof Error ? error.message : String(error);
+    }
+  } 
 }
 
 export const wpService = new WordPressService();

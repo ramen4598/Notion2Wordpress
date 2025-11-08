@@ -120,7 +120,6 @@ class NotionService {
     }
   }
 
-  // TODO: retryWithBackoff 적용 필요
   async getPageHTML(pageId: string): Promise<getPageHTMLResponse> {
 
     const onRetryFn = (error: Error, attempt: number) => {
