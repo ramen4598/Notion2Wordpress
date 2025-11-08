@@ -3,11 +3,12 @@ import FormData from 'form-data';
 import { config } from '../config/index.js';
 import { logger } from '../lib/logger.js';
 import { retryWithBackoff } from '../lib/retry.js';
+import { WpPostStatus } from '../enums/wp.enums.js';
 
 export interface CreatePostOptions {
   title: string;
   content: string;
-  status?: 'draft' | 'publish';
+  status?: WpPostStatus;
 }
 
 export interface CreatePostResponse {
@@ -49,7 +50,7 @@ class WordPressService {
 
   async createDraftPost(options: CreatePostOptions): Promise<CreatePostResponse> {
 
-    const { title, content, status = 'draft' } = options;
+    const { title, content, status = WpPostStatus.DRAFT } = options;
 
     const fn = async () => {
       const res = await this.client.post('/wp/v2/posts', {

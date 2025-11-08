@@ -8,6 +8,7 @@ import { imageDownloader } from '../lib/imageDownloader.js';
 import { logger } from '../lib/logger.js';
 import { JobType, JobStatus, JobItemStatus, ImageAssetStatus } from '../enums/db.enums.js';
 import { NotionPageStatus as NPStatus } from '../enums/notion.enums.js';
+import { WpPostStatus } from '../enums/wp.enums.js';
 
 type SyncError = {
   notionPageId: string;
@@ -199,7 +200,7 @@ class SyncOrchestrator {
       const post = await wpService.createDraftPost({
         title: page.title,
         content: finalHtml,
-        status: 'draft',
+        status: WpPostStatus.DRAFT,
       });
 
       wpPostId = post.id;
