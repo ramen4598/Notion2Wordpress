@@ -270,7 +270,7 @@ class SyncOrchestrator {
 
     // Update Notion page status to error
     try {
-      await notionService.updatePageStatus(notionPageId, 'error');
+      await notionService.updatePageStatus(notionPageId, NPStatus.Error);
       logger.info(`Updated Notion page ${notionPageId} status to error`);
     } catch (error: any) {
       logger.warn(`Failed to update Notion page ${notionPageId} status`, error);

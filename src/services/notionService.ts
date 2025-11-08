@@ -9,11 +9,12 @@ import { isRecord } from '../lib/utils.js';
 import { NotionToMarkdown } from 'notion-to-md';
 import { marked } from 'marked';
 import { MdBlock } from 'notion-to-md/build/types/index.js';
+import { NotionPageStatus } from '../enums/notion.enums.js';
 
 export interface NotionPage {
   id: string;
   title: string;
-  status: 'writing' | 'adding' | 'complete' | 'error';
+  status: NotionPageStatus;
   lastEditedTime: string;
   createdTime: string;
   properties: Record<string, unknown>;
@@ -27,7 +28,7 @@ export interface NotionBlock {
 
 export interface QueryPagesOptions {
   lastSyncTimestamp?: string;
-  statusFilter?: 'adding';
+  statusFilter?: NotionPageStatus;
 }
 
 export interface ImageReference {
@@ -217,18 +218,22 @@ class NotionService {
     return text || 'Untitled';
   }
 
-  private extractStatus(page: { properties?: Record<string, unknown> } | unknown): 'writing' | 'adding' | 'complete' | 'error' {
-    if (!isRecord(page)) return 'writing';
+  // TODO: notion property name status 환경변수로 관리하도록 수정
+  private extractStatus(page: { properties?: Record<string, unknown> } | unknown): NotionPageStatus {
+    if (!isRecord(page)) return NotionPageStatus.Writing;
     const props = page.properties as Record<string, unknown> | undefined;
-    if (!props) return 'writing';
+    if (!props) return NotionPageStatus.Writing;
     const statusProp = (props['status'] ?? props['Status']) as unknown;
-    if (!isRecord(statusProp)) return 'writing';
+    if (!isRecord(statusProp)) return NotionPageStatus.Writing;
     const select = statusProp['select'];
-    if (!isRecord(select)) return 'writing';
+    if (!isRecord(select)) return NotionPageStatus.Writing;
     const name = select['name'];
-    if (typeof name !== 'string') return 'writing';
-    if (name === 'writing' || name === 'adding' || name === 'complete' || name === 'error') return name;
-    return 'writing';
+    if (typeof name !== 'string') return NotionPageStatus.Writing;
+    // if (name === 'writing' || name === 'adding' || name === 'complete' || name === 'error') return name;
+    if (Object.values(NotionPageStatus).includes(name as NotionPageStatus)) {
+      return name as NotionPageStatus;
+    }
+    return NotionPageStatus.Writing;
   }
 
   private extractImagesRecursively(mdBlocks: MdBlock[]): ImageReference[] {
@@ -262,8 +267,9 @@ class NotionService {
     return images;
   }
 
+  // TODO: notion property name status 환경변수로 관리하도록 수정
   private makeFilter(options: QueryPagesOptions): Record<string, unknown> {
-    const { lastSyncTimestamp, statusFilter = 'adding' } = options;
+    const { lastSyncTimestamp, statusFilter = NotionPageStatus.Adding } = options;
 
     const propertyFilter = {
       "property": "status",
