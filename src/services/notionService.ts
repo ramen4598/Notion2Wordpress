@@ -272,23 +272,24 @@ class NotionService {
       "property": config.notionPageStatusProperty,
       "status": { "equals": statusFilter },
     };
+    if (!lastSyncTimestamp) return propertyFilter;
+
+    const lastSyncDate = new Date(lastSyncTimestamp);
+    const adjustedTime = new Date(lastSyncDate.getTime() - 900000); // -15 minutes margin
+    const queryTime = adjustedTime.toISOString();
+
     const timestampFilter = {
       "timestamp": "last_edited_time",
-      "last_edited_time": { "after": lastSyncTimestamp },
+      "last_edited_time": { "after": queryTime },
     };
 
-    let filter: Record<string, unknown> = propertyFilter;
     // If you've ever synced before, add the last edited time filter
-    if (lastSyncTimestamp) {
-      filter = {
-        "and": [
-          propertyFilter,
-          timestampFilter,
-        ],
-      };
-    }
-
-    return filter;
+    return {
+      "and": [
+        propertyFilter,
+        timestampFilter,
+      ],
+    };
   }
 
   private makeSorts(): Record<string, unknown>[] {
