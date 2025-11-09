@@ -186,8 +186,7 @@ class SyncOrchestrator {
           logger.info(`Uploaded image: ${filename} -> ${media.url}`);
         } catch (error: any) {
           logger.warn(`Failed to upload image from block ${image.blockId}`, error);
-          // Continue with other images - don't fail the whole sync
-          // TODO: 특정 이미지를 업로드하지 못한 경우 즉시 해당 페이지를 롤백하고 다음 페이지로 넘어감
+          throw new Error(`Failed to upload image from block ${image.blockId}`, error);
         }
       }
 
