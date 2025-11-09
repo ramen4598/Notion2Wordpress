@@ -191,7 +191,9 @@ class DatabaseService {
 
     try {
       const row = this.db!.prepare(sql).get(JobStatus.Completed) as { last_sync_timestamp: string } | undefined;
-      return row?.last_sync_timestamp ?? null;
+      const lastSyncTimestamp = row?.last_sync_timestamp ?? null;
+      logger.info('Querying Notion pages', { lastSyncTimestamp });
+      return lastSyncTimestamp;
     } catch (err) {
       logger.error('Failed to get last sync timestamp', err);
       throw err;

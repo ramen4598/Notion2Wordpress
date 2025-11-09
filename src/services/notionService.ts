@@ -142,7 +142,7 @@ class NotionService {
       const markdownContent = mdString.parent ?? ''; // Handle empty pages gracefully
       const html = marked.parse(markdownContent) as string;
 
-      logger.info(`Retrieved HTML for page ${pageId} and images ${images.length}`);
+      logger.info(`Converted page ${pageId} to HTML with ${images.length} images`);
       return {html: html, images: images};
     } catch (error: unknown) {
       logger.error(`Failed to get html for page ${pageId}`, error);
