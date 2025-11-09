@@ -70,7 +70,7 @@ class ImageDownloader {
     }
   }
 
-  // TODO: download() 대신에 downloadMultiple() 사용하도록 수정. See syncOrchestrator.ts:182.
+  // TODO: 사용하지 않는 메서드 제거 고려
   async downloadMultiple(urls: string[]): Promise<Map<string, DownloadImageResponse>> {
     const results = new Map<string, DownloadImageResponse>();
     const maxConcurrent = config.maxConcurrentImageDownloads;

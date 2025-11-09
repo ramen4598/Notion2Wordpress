@@ -143,6 +143,7 @@ class SyncOrchestrator {
       // Download and upload images
       const imageMap = new Map<string, string>();
 
+      // TODO: download와 upload을 묶고 병렬처리 고려. 핵심은 롤백 처리
       for (const image of images) {
         try {
           // Create image asset record
@@ -155,7 +156,6 @@ class SyncOrchestrator {
           });
 
           // Download image
-          // TODO: downloadMultiple 사용하도록 수정
           const { filename: ogfname, buffer, hash, contentType } = await imageDownloader.download({
             url: image.url,
           });
