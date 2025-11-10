@@ -13,6 +13,8 @@ async function main() {
   logger.info('Starting manual sync job');
 
   try {
+    const startTime = Date.now();
+
     // Initialize database
     await db.initialize();
 
@@ -38,6 +40,9 @@ async function main() {
 
     // Close database
     await db.close();
+
+    const duration = Date.now() - startTime;
+    logger.info(`Manual sync job completed in ${duration}ms`);
 
     // Exit with appropriate code
     process.exit(result.status === JobStatus.Completed ? 0 : 1);
