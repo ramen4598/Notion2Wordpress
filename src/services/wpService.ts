@@ -137,7 +137,7 @@ class WordPressService {
         fn, { onRetry: onRetryFn }
       )) as WPCreateMediaResponse;
 
-      logger.info(`Uploaded media to WordPress: ${response.id}`, {
+      logger.debug(`uploadMedia - Uploaded media to WordPress: ${response.id}`, {
         url: response.source_url,
         filename,
       });

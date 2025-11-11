@@ -52,7 +52,7 @@ class ImageDownloader {
       const contentType = response.headers['content-type'] || 'image/jpeg';
       const size = buffer.length;
 
-      logger.info('Downloaded image', {
+      logger.debug('download - Downloaded image', {
         filename,
         url: sanitizedUrl,
         size,
@@ -68,44 +68,6 @@ class ImageDownloader {
       });
       throw new Error(`Image download failed: ${error.message}`);
     }
-  }
-
-  // TODO: 사용하지 않는 메서드 제거 고려
-  async downloadMultiple(urls: string[]): Promise<Map<string, DownloadImageResponse>> {
-    const results = new Map<string, DownloadImageResponse>();
-    const maxConcurrent = config.maxConcurrentImageDownloads;
-
-    logger.info(`Downloading ${urls.length} images (max concurrent: ${maxConcurrent})`);
-
-    // Process in batches to respect concurrency limit
-    for (let i = 0; i < urls.length; i += maxConcurrent) {
-      const batch = urls.slice(i, i + maxConcurrent);
-      const promises = batch.map(async (url) => {
-        try {
-          const result = await this.download({ url });
-          return { url, result };
-        } catch (error) {
-          logger.warn('Failed to download image in batch', {
-            url: this.sanitizeUrl(url),
-            error: (error as Error).message,
-          });
-          return { url, result: null };
-        }
-      });
-
-      const batchResults = await Promise.all(promises);
-
-      for (const { url, result } of batchResults) {
-        // TODO: 실패한 다운로드도 results에 추가할 것. 별도의  status 필드로 성공/실패 구분.
-        // Only add successful downloads
-        if (result) {
-          results.set(url, result);
-        }
-      }
-    }
-
-    logger.info(`Downloaded ${results.size}/${urls.length} images successfully`);
-    return results;
   }
 
   private calculateHash(buffer: Buffer): string {
