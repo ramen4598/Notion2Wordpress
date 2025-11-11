@@ -8,6 +8,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { JobType, JobStatus, JobItemStatus, ImageAssetStatus } from '../enums/db.enums.js';
+import { asError } from '../lib/utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -74,7 +75,8 @@ class DatabaseService {
       this.db = new DatabaseConstructor(dbPath, {});
       logger.info(`Database connected: ${dbPath}`);
       await this.initSchema();
-    } catch (err) {
+    } catch (error : unknown) {
+      const err = asError(error);
       logger.error('Failed to open database', err);
       throw err;
     }
@@ -89,7 +91,8 @@ class DatabaseService {
       // -> Since schema.sql includes IF NOT EXISTS, there is no problem
       this.db!.exec(schema); // ! means db must not be null here
       logger.info('Database schema initialized');
-    } catch (err) {
+    } catch (error : unknown) {
+      const err = asError(error);
       logger.error('Failed to initialize database schema', err);
       throw err;
     }
@@ -102,7 +105,8 @@ class DatabaseService {
       this.db!.close();
       logger.info('Database connection closed');
       this.db = null;
-    } catch (err) {
+    } catch (error : unknown) {
+      const err = asError(error);
       logger.error('Failed to close database', err);
       throw err;
     }
@@ -174,7 +178,8 @@ class DatabaseService {
       // Nullish Coalescing Operator
       // return if row is undefined and null, return right side value
       return row ?? null; 
-    } catch (err) {
+    } catch (error : unknown) {
+      const err = asError(error);
       logger.error(`Failed to get sync job ${id}`, err);
       throw err;
     }
@@ -194,7 +199,8 @@ class DatabaseService {
       const lastSyncTimestamp = row?.last_sync_timestamp ?? null;
       logger.info('Querying Notion pages', { lastSyncTimestamp });
       return lastSyncTimestamp;
-    } catch (err) {
+    } catch (error: unknown) {
+      const err = asError(error);
       logger.error('Failed to get last sync timestamp', err);
       throw err;
     }
@@ -308,7 +314,8 @@ class DatabaseService {
     try {
       const rows = this.db!.prepare(sql).all(syncJobItemId) as ImageAsset[];
       return rows;
-    } catch (err) {
+    } catch (error: unknown) {
+      const err = asError(error);
       logger.error(`Failed to get image assets for job item ${syncJobItemId}`, err);
       throw err;
     }
@@ -334,7 +341,8 @@ class DatabaseService {
     try {
       const row = this.db!.prepare(sql).get(notionPageId) as PagePostMap | undefined;
       return row ?? null;
-    } catch (err) {
+    } catch (error: unknown) {
+      const err = asError(error);
       logger.error(`Failed to get page-post mapping for ${notionPageId}`, err);
       throw err;
     }
