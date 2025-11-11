@@ -10,6 +10,7 @@ import { JobType, JobStatus, JobItemStatus, ImageAssetStatus } from '../enums/db
 import { NotionPageStatus as NPStatus } from '../enums/notion.enums.js';
 import { WpPostStatus } from '../enums/wp.enums.js';
 import { config } from '../config/index.js';
+import { asError } from '../lib/utils.js';
 
 type SyncError = {
   notionPageId: string;
@@ -38,6 +39,7 @@ export type ExecuteSyncJobResponse = SyncJob & {
   status: Exclude<JobStatus, JobStatus.Running>;
 };
 
+// TODO: 전체적인 예외처리 개선 필요
 class SyncOrchestrator {
 
   async executeSyncJob(jobType: JobType): Promise<ExecuteSyncJobResponse> {
@@ -70,24 +72,25 @@ class SyncOrchestrator {
       });
 
       return syncJob as ExecuteSyncJobResponse;
-    } catch (error: any) { // TODO: error 타입 개선
+    } catch (error: unknown) {
       // Handle sync job failure, not individual sync job item failures.
+      const err = asError(error);
       syncJob.status = JobStatus.Failed;
       syncJob.errors = [{
         notionPageId: 'N/A',
         pageTitle: 'Fatal Error',
-        errorMessage: error.message,
+        errorMessage: err.message,
       }];
 
       await db.updateSyncJob(syncJob.jobId, {
         status: syncJob.status,
-        error_message: error.message,
+        error_message: err.message,
       });
 
       await this.sendTelegramNotification(syncJob);
 
-      logger.error(`Sync job ${syncJob.jobId} failed with fatal error`, error);
-      throw error;
+      logger.error(`Sync job ${syncJob.jobId} failed with fatal error`, err);
+      throw err;
     }
   }
 
@@ -105,15 +108,16 @@ class SyncOrchestrator {
         await this.syncPage(syncJob.jobId, page);
         syncJob.pagesSucceeded++;
         logger.info(`Successfully synced page: ${page.title}`);
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const err = asError(error);
         syncJob.pagesFailed++;
         const syncError: SyncError = {
           notionPageId: page.id,
           pageTitle: page.title,
-          errorMessage: error.message,
+          errorMessage: err.message,
         };
         syncJob.errors.push(syncError);
-        logger.error(`Failed to sync page: ${page.title}`, error);
+        logger.error(`Failed to sync page: ${page.title}`, err);
       }
 
       // Update job progress
@@ -168,17 +172,17 @@ class SyncOrchestrator {
       });
 
       logger.info(`Successfully created WordPress post ${post.id} for page ${page.id}`);
-    } catch (error: any) {
-      // Rollback on failure
-      logger.error(`Sync failed for page ${page.id}, rolling back`, error);
+    } catch (error: unknown) {
+      const err = asError(error);
+      logger.error(`Sync failed for page ${page.id}, rolling back`, err);
 
       try {
-        await this.rollback(syncJobItem, error.message);
-      } catch (rollbackError: any) {
-        logger.error(`Rollback failed for page ${page.id}`, rollbackError);
+        await this.rollback(syncJobItem, err.message);
+      } catch (rollbackError: unknown) {
+        logger.error(`Rollback failed for page ${page.id}`, asError(rollbackError));
       }
 
-      throw error;
+      throw err;
     }
   }
 
@@ -246,9 +250,10 @@ class SyncOrchestrator {
       imageMap.set(image.placeholder, media.url);
 
       logger.debug(`syncImage - Uploaded image: ${filename} -> ${media.url}`);
-    } catch (error: any) {
-      logger.warn(`Failed to upload image from block ${image.blockId}`, error);
-      throw new Error(`Failed to upload image from block ${image.blockId}`, error);
+    } catch (error: unknown) {
+      const err = asError(error);
+      logger.warn(`Failed to upload image from block ${image.blockId}`, err);
+      throw new Error(`Failed to upload image from block ${image.blockId}`, err);
     }
   }
 
@@ -261,8 +266,8 @@ class SyncOrchestrator {
       try {
         await wpService.deleteMedia(mediaId);
         logger.info(`Rolled back media: ${mediaId}`);
-      } catch (error: any) {
-        logger.warn(`Failed to delete media ${mediaId} during rollback`, error);
+      } catch (error: unknown) {
+        logger.warn(`Failed to delete media ${mediaId} during rollback`, asError(error));
       }
     }
 
@@ -271,8 +276,8 @@ class SyncOrchestrator {
       try {
         await wpService.deletePost(wpPostId);
         logger.info(`Rolled back post: ${wpPostId}`);
-      } catch (error: any) {
-        logger.warn(`Failed to delete post ${wpPostId} during rollback`, error);
+      } catch (error: unknown) {
+        logger.warn(`Failed to delete post ${wpPostId} during rollback`, asError(error));
       }
     }
 
@@ -280,8 +285,8 @@ class SyncOrchestrator {
     try {
       await notionService.updatePageStatus(notionPageId, NPStatus.Error);
       logger.info(`Updated Notion page ${notionPageId} status to error`);
-    } catch (error: any) {
-      logger.warn(`Failed to update Notion page ${notionPageId} status`, error);
+    } catch (error: unknown) {
+      logger.warn(`Failed to update Notion page ${notionPageId} status`, asError(error));
     }
 
     // Mark job item as failed
@@ -291,8 +296,8 @@ class SyncOrchestrator {
           status: JobItemStatus.Failed,
           error_message: errorMessage,
         });
-      } catch (error: any) {
-        logger.warn(`Failed to update job item ${jobItemId} status`, error);
+      } catch (error: unknown) {
+        logger.warn(`Failed to update job item ${jobItemId} status`, asError(error));
       }
     }
   }

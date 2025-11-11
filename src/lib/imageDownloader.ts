@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { config } from '../config/index.js';
 import { logger } from '../lib/logger.js';
 import { retryWithBackoff } from '../lib/retry.js';
+import { asError } from '../lib/utils.js';
 
 const VERSION = '1.0';
 
@@ -61,12 +62,13 @@ class ImageDownloader {
       });
 
       return { filename, buffer, hash, contentType, size };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = asError(error);
       logger.error('Failed to download image', {
         url: sanitizedUrl,
-        error: error.message,
+        error: err.message,
       });
-      throw new Error(`Image download failed: ${error.message}`);
+      throw new Error(`Image download failed: ${err.message}`);
     }
   }
 

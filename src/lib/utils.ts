@@ -8,3 +8,7 @@
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
+
+export function asError (e: unknown): Error {
+  return e instanceof Error ? e : new Error(String(e));
+}

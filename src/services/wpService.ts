@@ -4,6 +4,7 @@ import { config } from '../config/index.js';
 import { logger } from '../lib/logger.js';
 import { retryWithBackoff } from '../lib/retry.js';
 import { WpPostStatus } from '../enums/wp.enums.js';
+import { asError } from '../lib/utils.js';
 
 export interface CreatePostOptions {
   title: string;
@@ -225,7 +226,7 @@ class WordPressService {
     if (isAxiosError(error)) {
       return `${error.message}${error.response?.status ? ` (HTTP ${error.response.status})` : ''}`;
     } else {
-      return error instanceof Error ? error.message : String(error);
+      return asError(error).message;
     }
   } 
 }

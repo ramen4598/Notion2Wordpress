@@ -10,6 +10,7 @@ import { NotionToMarkdown } from 'notion-to-md';
 import { marked } from 'marked';
 import { MdBlock } from 'notion-to-md/build/types/index.js';
 import { NotionPageStatus } from '../enums/notion.enums.js';
+import { asError } from '../lib/utils.js';
 
 export interface NotionPage {
   id: string;
@@ -115,7 +116,7 @@ class NotionService {
 
       return pages;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = asError(error).message;
       logger.error('Failed to query Notion pages', { error: message });
       throw new Error(`Notion query failed: ${message}`);
     }
@@ -147,7 +148,7 @@ class NotionService {
       return {html: html, images: images};
     } catch (error: unknown) {
       logger.error(`Failed to get html for page ${pageId}`, error);
-      const message = error instanceof Error ? error.message : String(error);
+      const message = asError(error).message;
       throw new Error(`Failed to get page html: ${message}`);
     }
   }
@@ -188,7 +189,7 @@ class NotionService {
       };
     } catch (error: unknown) {
       logger.error(`Failed to update page ${pageId} status`, error);
-      const message = error instanceof Error ? error.message : String(error);
+      const message = asError(error).message;
       throw new Error(`Failed to update page status: ${message}`);
     }
   }
