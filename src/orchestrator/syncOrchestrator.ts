@@ -117,7 +117,6 @@ class SyncOrchestrator {
           errorMessage: err.message,
         };
         syncJob.errors.push(syncError);
-        logger.error(`Failed to sync page: ${page.title}`, err);
       }
 
       // Update job progress
@@ -177,7 +176,7 @@ class SyncOrchestrator {
       logger.error(`Sync failed for page ${page.id}, rolling back`, err);
 
       try {
-        await this.rollback(syncJobItem, err.message);
+        this.rollback(syncJobItem, err.message);
       } catch (rollbackError: unknown) {
         logger.error(`Rollback failed for page ${page.id}`, asError(rollbackError));
       }
@@ -257,48 +256,37 @@ class SyncOrchestrator {
     }
   }
 
-  private async rollback( syncJobItem: SyncJobItem, errorMessage: string ): Promise<void> {
+  private rollback( syncJobItem: SyncJobItem, errorMessage: string ): void {
     const { id: jobItemId, pageId: notionPageId, wpPostId, uploadedMediaIds } = syncJobItem;
     logger.warn(`Rolling back sync for page ${notionPageId}`);
 
     // Delete uploaded media
     for (const mediaId of uploadedMediaIds) {
-      try {
-        await wpService.deleteMedia(mediaId);
-        logger.info(`Rolled back media: ${mediaId}`);
-      } catch (error: unknown) {
+      wpService.deleteMedia(mediaId).catch((error: unknown) => {
         logger.warn(`Failed to delete media ${mediaId} during rollback`, asError(error));
-      }
+      });
     }
 
     // Delete WordPress post if created
     if (wpPostId) {
-      try {
-        await wpService.deletePost(wpPostId);
-        logger.info(`Rolled back post: ${wpPostId}`);
-      } catch (error: unknown) {
+      wpService.deletePost(wpPostId).catch((error: unknown) => {
         logger.warn(`Failed to delete post ${wpPostId} during rollback`, asError(error));
-      }
+      });
     }
 
     // Update Notion page status to error
-    try {
-      await notionService.updatePageStatus(notionPageId, NPStatus.Error);
-      logger.info(`Updated Notion page ${notionPageId} status to error`);
-    } catch (error: unknown) {
+    notionService.updatePageStatus(notionPageId, NPStatus.Error).catch((error: unknown) => {
       logger.warn(`Failed to update Notion page ${notionPageId} status`, asError(error));
-    }
+    });
 
     // Mark job item as failed
     if (jobItemId) {
-      try {
-        await db.updateSyncJobItem(jobItemId, {
-          status: JobItemStatus.Failed,
-          error_message: errorMessage,
-        });
-      } catch (error: unknown) {
+      db.updateSyncJobItem(jobItemId, {
+        status: JobItemStatus.Failed,
+        error_message: errorMessage,
+      }).catch((error: unknown) => {
         logger.warn(`Failed to update job item ${jobItemId} status`, asError(error));
-      }
+      });
     }
   }
 
