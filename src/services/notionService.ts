@@ -129,11 +129,12 @@ class NotionService {
 
     try{
       // Get MdBlock
-      const mdBlocks = await retryWithBackoff(
+      let mdBlocks = await retryWithBackoff(
         () => this.n2m.pageToMarkdown(pageId),
         { onRetry: onRetryFn }
       );
 
+      mdBlocks = this.handleCalloutRecursively(mdBlocks);
       // Extract images and replace urls with placeholders
       const images = this.extractImagesRecursively(mdBlocks);
 
@@ -234,6 +235,31 @@ class NotionService {
     return NotionPageStatus.Writing;
   }
 
+  private handleCalloutRecursively(mdBlocks: MdBlock[]): MdBlock[] {
+    let updatedBlocks: MdBlock[] = [];
+    if (!Array.isArray(mdBlocks) || mdBlocks.length === 0) return updatedBlocks;
+
+    for(const block of mdBlocks) {
+      if (block.type === 'callout') {
+        const callout = block as { parent: string; blockId: string, type: string };
+        const urlRegex = /!\[.*?\]\((.*?)\)/g;
+        const updatedBlock = {
+          parent: callout.parent.replace(urlRegex, ''),
+          blockId: callout.blockId, 
+          type: 'paragraph', 
+          children: [] 
+        };
+        updatedBlocks.push(updatedBlock);
+        updatedBlocks.push(...this.handleCalloutRecursively((block.children)));
+      } else {
+        const updatedBlock: MdBlock = { ...block, children: [] };
+        updatedBlock.children = this.handleCalloutRecursively(block.children);
+        updatedBlocks.push(updatedBlock);
+      }
+    }
+    return updatedBlocks;
+  }
+
   private extractImagesRecursively(mdBlocks: MdBlock[]): ImageReference[] {
     let images: ImageReference[] = [];
 
@@ -258,8 +284,7 @@ class NotionService {
         logger.debug(`extractImagesRecursively: extracted image - blockId: ${b.blockId}, url: ${url}, placeholder: ${placeholder}`);
       }
 
-      const children: MdBlock[] = (block as { children?: MdBlock[] }).children || [];
-      images.push(...this.extractImagesRecursively(children));
+      images.push(...this.extractImagesRecursively(block.children));
     }
 
     return images;
