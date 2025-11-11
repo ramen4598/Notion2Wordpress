@@ -243,8 +243,9 @@ class NotionService {
       if (block.type === 'callout') {
         const callout = block as { parent: string; blockId: string, type: string };
         const urlRegex = /!\[.*?\]\((.*?)\)/g;
+        const ctitle = callout.parent.split('\n')[0].replace(urlRegex, '');
         const updatedBlock = {
-          parent: callout.parent.replace(urlRegex, ''),
+          parent: ctitle,
           blockId: callout.blockId, 
           type: 'paragraph', 
           children: [] 
@@ -281,7 +282,7 @@ class NotionService {
         // Replace url with placeholder at here!
         block.parent = block.parent.replace(url, placeholder); 
         images.push({ blockId: b.blockId, url, altText, placeholder });
-        logger.debug(`extractImagesRecursively: extracted image - blockId: ${b.blockId}, url: ${url}, placeholder: ${placeholder}`);
+        logger.debug(`extractImagesRecursively: extracted image - blockId: ${b.blockId}, placeholder: ${placeholder}`);
       }
 
       images.push(...this.extractImagesRecursively(block.children));
