@@ -9,6 +9,7 @@ import { logger } from '../lib/logger.js';
 import { JobType, JobStatus, JobItemStatus, ImageAssetStatus } from '../enums/db.enums.js';
 import { NotionPageStatus as NPStatus } from '../enums/notion.enums.js';
 import { WpPostStatus } from '../enums/wp.enums.js';
+import { config } from '../config/index.js';
 
 type SyncError = {
   notionPageId: string;
@@ -181,52 +182,73 @@ class SyncOrchestrator {
     }
   }
 
-  // TODO: download와 upload을 묶고 병렬처리 고려. 핵심은 롤백 처리
   private async syncImages(syncJobItem: SyncJobItem, imageMap: Map<string, string>, images: ImageReference[]): Promise<void> {
-    for (const image of images) {
-      try {
-        // Create image asset record
-        const assetId = await db.createImageAsset({
-          sync_job_item_id: syncJobItem.id,
-          notion_page_id: syncJobItem.pageId,
-          notion_block_id: image.blockId,
-          notion_url: image.url,
-          status: ImageAssetStatus.Pending,
-        });
+    const results: PromiseSettledResult<void>[] = [];    
+    const maxConcurrent = config.maxConcurrentImageDownloads;
+    const errors : Error[] = [];
 
-        // Download image
-        const { filename: ogfname, buffer, hash, contentType } = await imageDownloader.download({
-          url: image.url,
-        });
+    for(let i = 0; i < images.length; i += maxConcurrent) {
+      logger.info(`Syncing images ${i + 1} to ${Math.min(i + maxConcurrent, images.length)} of ${images.length}`);
+      const batch = images.slice(i, i + maxConcurrent);
+      const promises = batch.map((image) => this.syncImage(syncJobItem, imageMap, image));
+      const batchResults = await Promise.allSettled(promises);
+      results.push(...batchResults);
+    }
 
-        const extension = this.getExtensionFromContentType(contentType);
-        const filename = `${ogfname}-${hash.substring(0, 16)}.${extension}`;
-
-        // Upload to WordPress
-        const media = await wpService.uploadMedia({
-          buffer,
-          filename,
-          contentType,
-          altText: image.altText,
-        });
-
-        syncJobItem.uploadedMediaIds.push(media.id);
-
-        // Update image asset record
-        await db.updateImageAsset(assetId, {
-          wp_media_id: media.id,
-          wp_media_url: media.url,
-          status: ImageAssetStatus.Uploaded,
-        });
-
-        // Map Notion URL to WordPress URL
-        imageMap.set(image.placeholder, media.url);
-
-        logger.info(`Uploaded image: ${filename} -> ${media.url}`);
-      } catch (error: any) {
-        logger.warn(`Failed to upload image from block ${image.blockId}`, error);
-        throw new Error(`Failed to upload image from block ${image.blockId}`, error);
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        errors.push(new Error(result.reason));
       }
+    }
+    if (errors.length > 0) {
+      const message = errors.map(e => e.message).join('; ')
+      throw new Error(`Failed to sync ${errors.length} images : ${message}`);
+    }
+  }
+
+  private async syncImage(syncJobItem: SyncJobItem, imageMap: Map<string, string>, image: ImageReference): Promise<void> {
+    try {
+      // Create image asset record
+      const assetId = await db.createImageAsset({
+        sync_job_item_id: syncJobItem.id,
+        notion_page_id: syncJobItem.pageId,
+        notion_block_id: image.blockId,
+        notion_url: image.url,
+        status: ImageAssetStatus.Pending,
+      });
+
+      // Download image
+      const { filename: ogfname, buffer, hash, contentType } = await imageDownloader.download({
+        url: image.url,
+      });
+
+      const extension = this.getExtensionFromContentType(contentType);
+      const filename = `${ogfname}-${hash.substring(0, 16)}.${extension}`;
+
+      // Upload to WordPress
+      const media = await wpService.uploadMedia({
+        buffer,
+        filename,
+        contentType,
+        altText: image.altText,
+      });
+
+      syncJobItem.uploadedMediaIds.push(media.id);
+
+      // Update image asset record
+      await db.updateImageAsset(assetId, {
+        wp_media_id: media.id,
+        wp_media_url: media.url,
+        status: ImageAssetStatus.Uploaded,
+      });
+
+      // Map Notion URL to WordPress URL
+      imageMap.set(image.placeholder, media.url);
+
+      logger.debug(`syncImage - Uploaded image: ${filename} -> ${media.url}`);
+    } catch (error: any) {
+      logger.warn(`Failed to upload image from block ${image.blockId}`, error);
+      throw new Error(`Failed to upload image from block ${image.blockId}`, error);
     }
   }
 
