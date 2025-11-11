@@ -2,6 +2,7 @@
 
 import { logger } from './logger.js';
 import { config } from '../config/index.js';
+import { asError } from './utils.js';
 
 export interface RetryOptions {
   maxAttempts?: number;
@@ -30,8 +31,8 @@ export async function retryWithBackoff<T>(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await fn();
-    } catch (error) {
-      lastError = error as Error; // error must be of type Error
+    } catch (error: unknown) {
+      lastError = asError(error);
 
       if (attempt === maxAttempts) {
         logger.error(`Max retry attempts (${maxAttempts}) exceeded`, lastError);

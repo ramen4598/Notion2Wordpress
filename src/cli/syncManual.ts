@@ -8,6 +8,7 @@ import { db } from '../db/index.js';
 import { syncOrchestrator } from '../orchestrator/syncOrchestrator.js';
 import { JobType } from '../enums/db.enums.js';
 import { JobStatus } from '../enums/db.enums.js';
+import { asError } from '../lib/utils.js';
 
 async function main() {
   logger.info('Starting manual sync job');
@@ -46,8 +47,8 @@ async function main() {
 
     // Exit with appropriate code
     process.exit(result.status === JobStatus.Completed ? 0 : 1);
-  } catch (error) {
-    logger.error('Manual sync failed', error);
+  } catch (error: unknown) {
+    logger.error('Manual sync failed', asError(error));
     await db.close();
     process.exit(1);
   }

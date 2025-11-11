@@ -5,6 +5,7 @@ import { config } from '../config/index.js';
 import { logger } from '../lib/logger.js';
 import { SyncJob } from '../orchestrator/syncOrchestrator.js';
 import { JobStatus } from '../enums/db.enums.js';
+import { asError } from '../lib/utils.js';
 
 class TelegramService {
   private bot: Telegraf | null;
@@ -45,10 +46,10 @@ class TelegramService {
         link_preview_options: { is_disabled: true },
       });
       logger.info(`Sent Telegram notification for job ${jobId} : ${status}`);
-    } catch (error) {
+    } catch (error : unknown) {
       logger.error('Failed to send Telegram notification', {
         jobId,
-        error: error instanceof Error ? error.message : String(error),
+        error: asError(error),
       });
       // Don't throw - notification failures shouldn't block the sync
     }
@@ -114,9 +115,10 @@ class TelegramService {
     try {
       await this.bot!.telegram.sendMessage(this.chatId!, message);
       logger.info('Sent test Telegram message');
-    } catch (error) {
-      logger.error('Failed to send test Telegram message', error);
-      throw error;
+    } catch (error: unknown) {
+      const err = asError(error);
+      logger.error('Failed to send test Telegram message', err);
+      throw err;
     }
   }
 }

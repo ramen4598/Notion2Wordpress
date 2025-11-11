@@ -313,9 +313,10 @@ class SyncOrchestrator {
         pagesFailed: 0,
         errors: [],
       };
-    } catch (error) {
-      logger.error('Failed to create sync job', error);
-      throw error;
+    } catch (error: unknown) {
+      const err = asError(error);
+      logger.error('Failed to create sync job', err);
+      throw err;
     }
   }
 
@@ -333,9 +334,10 @@ class SyncOrchestrator {
         wpPostId: undefined,
         uploadedMediaIds: [],
       };
-    } catch (error) {
-      logger.error('Failed to create sync job item', error);
-      throw error;
+    } catch (error: unknown) {
+      const err = asError(error);
+      logger.error('Failed to create sync job item', err);
+      throw err;
     }
   }
 

@@ -6,6 +6,7 @@ import { logger } from './lib/logger.js';
 import { db } from './db/index.js';
 import { syncOrchestrator } from './orchestrator/syncOrchestrator.js';
 import { JobType } from './enums/db.enums.js';
+import { asError } from './lib/utils.js';
 
 async function main() {
   logger.info('Starting Notion2WordPress Sync Service');
@@ -59,8 +60,8 @@ async function main() {
       await db.close();
       process.exit(0);
     });
-  } catch (error) {
-    logger.error('Failed to start sync service', error);
+  } catch (error: unknown) {
+    logger.error('Failed to start sync service', asError(error));
     process.exit(1);
   }
 }
