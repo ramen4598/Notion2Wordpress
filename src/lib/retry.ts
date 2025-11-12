@@ -12,6 +12,9 @@ export interface RetryOptions {
   onRetry?: (error: Error, attempt: number) => void;
 }
 
+// Retries the provided async function with exponential backoff
+// until it succeeds or the maximum number of attempts is reached.
+// Throws the last encountered error if all attempts fail.
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   options: RetryOptions = {}
@@ -51,6 +54,7 @@ export async function retryWithBackoff<T>(
       await sleep(currentDelay);
 
       // Exponential backoff
+      // ex: 1000ms, 2000ms, 4000ms, 8000ms, ...
       currentDelay = Math.min(currentDelay * backoffMultiplier, maxDelayMs);
     }
   }

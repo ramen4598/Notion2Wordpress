@@ -39,6 +39,7 @@ async function main() {
           });
         }
       } catch (error) {
+        // fail to start scheduled sync
         logger.error('Scheduled sync failed', error);
       }
     });

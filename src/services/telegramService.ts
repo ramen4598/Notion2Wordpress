@@ -8,9 +8,9 @@ import { JobStatus } from '../enums/db.enums.js';
 import { asError } from '../lib/utils.js';
 
 class TelegramService {
-  private bot: Telegraf | null;
-  private chatId: string | null;
-  private enabled: boolean;
+  private bot: Telegraf | null; // Telegram bot instance
+  private chatId: string | null; // Telegram chat ID to send messages to
+  private enabled: boolean; // Whether to use Telegram notifications
 
   constructor() {
     this.enabled = config.telegramEnabled;
@@ -34,6 +34,11 @@ class TelegramService {
     this.chatId = config.telegramChatId;
   }
 
+  /**
+   * Sends a Telegram notification about the sync job status.
+   * @param syncJob The sync job details.
+   * @throws Will not throw - notification failures shouldn't block the sync.
+   */
   async sendSyncNotification(syncJob: SyncJob): Promise<void> {
     if (!this.checkConfigured()) return;
 
@@ -55,6 +60,11 @@ class TelegramService {
     }
   }
 
+  /**
+   * Formats the notification message based on the sync job details.
+   * @param syncJob The sync job details.
+   * @returns Formatted message string.
+   */
   private formatNotificationMessage(syncJob: SyncJob): string {
     const { jobId, jobType, status, pagesProcessed, pagesSucceeded, pagesFailed, errors } =
       syncJob;
@@ -89,11 +99,21 @@ class TelegramService {
     return message;
   }
 
+  /**
+   * Truncates an error message to a maximum length.
+   * @param error The error message.
+   * @param maxLength Maximum length of the error message.
+   * @returns Truncated error message string.
+   */
   private truncateError(error: string, maxLength: number = 100): string {
     if (error.length <= maxLength) return error;
     return error.substring(0, maxLength) + '...';
   }
   
+  /**
+   * Checks if Telegram notifications are properly configured.
+   * @returns True if configured, false otherwise.
+   */
   private checkConfigured(): boolean {
     if (!this.enabled) {
       logger.info('Telegram notifications disabled, skipping notification');

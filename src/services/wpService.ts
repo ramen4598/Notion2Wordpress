@@ -1,3 +1,5 @@
+// Description: Service to interact with WordPress REST API
+
 import axios, { type AxiosInstance, isAxiosError } from 'axios';
 import FormData from 'form-data';
 import { config } from '../config/index.js';
@@ -49,6 +51,12 @@ class WordPressService {
     });
   }
 
+  /**
+   * Create a draft post in WordPress
+   * @param options - title, content, and status(optional, defaults to draft)
+   * @returns CreatePostResponse with post details
+   * @throws Error if creation fails after retries
+   */
   async createDraftPost(options: CreatePostOptions): Promise<CreatePostResponse> {
 
     const { title, content, status = WpPostStatus.DRAFT } = options;
@@ -98,6 +106,12 @@ class WordPressService {
     }
   }
 
+  /**
+   * Upload media to WordPress
+   * @param options - buffer, filename, contentType, altText(optional)
+   * @returns UploadMediaResponse with media details
+   * @throws Error if upload fails after retries
+   */
   async uploadMedia(options: UploadMediaOptions): Promise<UploadMediaResponse> {
     const { buffer, filename, contentType, altText } = options;
 
@@ -156,6 +170,11 @@ class WordPressService {
     }
   }
 
+  /**
+   * Delete a post in WordPress
+   * @param postId - ID of the post to delete
+   * @throws Error if deletion fails after retries
+   */
   async deletePost(postId: number): Promise<void> {
     const fn = async () => {
       const res = await this.client.delete(`/wp/v2/posts/${postId}`, {
@@ -182,6 +201,11 @@ class WordPressService {
     }
   }
 
+  /**
+   * Delete media in WordPress
+   * @param mediaId - ID of the media to delete
+   * @throws Error if deletion fails after retries
+   */
   async deleteMedia(mediaId: number): Promise<void> {
     const fn = async () => {
       const res = await this.client.delete(`/wp/v2/media/${mediaId}`, {
@@ -208,6 +232,12 @@ class WordPressService {
     }
   }
 
+  /**
+   * Replace image placeholders in HTML with actual WordPress URLs
+   * @param html - The HTML content with placeholders
+   * @param imageMap - Map of placeholders to WordPress URLs
+   * @returns Updated HTML with replaced URLs
+   */
   async replaceImageUrls(html: string, imageMap: Map<string, string>): Promise<string> {
     let updatedHtml = html;
 
@@ -222,6 +252,11 @@ class WordPressService {
     return updatedHtml;
   }
 
+  /**
+   * Extract error message from Axios error or generic error
+   * @param error - unknown error object
+   * @returns Extracted error message string
+   */
   private getAxiosErrorMessage(error: unknown): string {
     if (isAxiosError(error)) {
       return `${error.message}${error.response?.status ? ` (HTTP ${error.response.status})` : ''}`;

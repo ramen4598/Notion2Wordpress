@@ -23,6 +23,8 @@ export interface DownloadImageResponse {
 }
 
 class ImageDownloader {
+
+  // Downloads an image from the given URL with retry logic.
   async download(options: DownloadImageOptions): Promise<DownloadImageResponse> {
     const { url, timeout = config.imageDownloadTimeoutMs } = options;
     const sanitizedUrl = this.sanitizeUrl(url);
@@ -45,6 +47,7 @@ class ImageDownloader {
     };
 
     try {
+      // if the download fails, retry with exponential backoff
       const response = await retryWithBackoff(fn, { onRetry: onRetryFn });
 
       const filename = this.getFilenameFromUrl(url);
@@ -76,8 +79,8 @@ class ImageDownloader {
     return crypto.createHash('sha256').update(buffer).digest('hex');
   }
 
+  // For logging, remove query parameters and fragments
   private sanitizeUrl(url: string): string {
-    // For logging, remove query parameters and fragments
     try {
       const urlObj = new URL(url);
       return `${urlObj.origin}${urlObj.pathname}`;
@@ -86,6 +89,7 @@ class ImageDownloader {
     }
   }
 
+  // Extracts filename from URL without extension
   private getFilenameFromUrl(url: string): string {
     let filename = url.split('/').pop()?.split('?')[0] || 'image';
     const lastDot = filename.lastIndexOf('.');

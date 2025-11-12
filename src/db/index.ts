@@ -185,6 +185,9 @@ class DatabaseService {
     }
   }
 
+  // Get the last successful sync timestamp
+  // Used for incremental syncs
+  // Returns null if no successful sync found
   async getLastSyncTimestamp(): Promise<string | null> {
     const sql = `
       SELECT last_sync_timestamp

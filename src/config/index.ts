@@ -24,7 +24,7 @@ export interface Config {
   wpApiUrl: string;
   wpUsername: string;
   wpAppPassword: string;
-  wpVerifySsl: boolean;
+  wpVerifySsl: boolean; // Whether to verify SSL certificates when connecting to WordPress
 
   // Telegram
   telegramEnabled: boolean;
@@ -32,22 +32,24 @@ export interface Config {
   telegramChatId: string | undefined;
 
   // Sync
-  syncSchedule: string;
+  syncSchedule: string; // Cron expression for sync schedule
   nodeEnv: string;
 
   // Database
   databasePath: string;
+  
+  // Logging
   logLevel: string;
 
   // Image Download
-  maxConcurrentImageDownloads: number;
+  maxConcurrentImageDownloads: number; // Max number of concurrent image downloads
   imageDownloadTimeoutMs: number;
 
   // Retry
-  maxRetryAttempts: number;
-  retryInitialDelayMs: number;
-  retryMaxDelayMs: number;
-  retryBackoffMultiplier: number;
+  maxRetryAttempts: number; // maximum number of retry attempts
+  retryInitialDelayMs: number; // starting delay for retries in milliseconds
+  retryMaxDelayMs: number; // maximum delay for retries in milliseconds
+  retryBackoffMultiplier: number; // multiplier for exponential backoff
 }
 
 function getEnv(key: string, defaultValue?: string): string {
@@ -75,6 +77,7 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
   return value.toLowerCase() === 'true';
 }
 
+// Returns the value of the environment variable or undefined if not set
 function getEnvOrUndefined(key: string): string | undefined {
   return process.env[key] || undefined;
 }
