@@ -15,8 +15,8 @@ export interface CreatePostOptions {
 export interface CreatePostResponse {
   id: number;
   title: string;
-  link: string;
-  status: string;
+  link: string; // URL to the post
+  status: WpPostStatus;
 }
 
 export interface UploadMediaOptions {
@@ -74,7 +74,7 @@ class WordPressService {
       id: number;
       title: { rendered: string };
       link: string;
-      status: string;
+      status: WpPostStatus;
     }
 
     try {
