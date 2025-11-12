@@ -3,9 +3,11 @@
 This document outlines the manual end-to-end scenario to validate the full sync flow.
 
 ## Prerequisites
-- Valid `.env` configured (see `specs/001-notion2wp-sync/quickstart.md`)
+- Valid `.env` configured (see `.env.example`)
 - WordPress instance reachable with Application Passwords
-- Notion datasource with `status` select property
+- Notion datasource with named `status` select property
+  - with `writing`, `adding`, `done`, `error` states
+  - name can change in `.env` (e.g. `NOTION_PAGE_PROPERTY_NAME`)
 - Telegram bot token and chat id (optional for notifications)
 
 ## Steps
@@ -27,7 +29,7 @@ This document outlines the manual end-to-end scenario to validate the full sync 
    - Open the draft and verify images are present
 
 5. Verify Notion status update
-   - The page `status` should become `complete` on success
+   - The page `status` should become `done` on success
 
 6. Failure handling (optional)
    - Intentionally cause a failure (e.g., wrong credentials) and re-run

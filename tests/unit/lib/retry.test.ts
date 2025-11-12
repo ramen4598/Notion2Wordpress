@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { retryWithBackoff } from '../src/lib/retry.js';
+import { retryWithBackoff } from '../../../src/lib/retry.js';
 
 describe('retryWithBackoff', () => {
   it('resolves on first attempt', async () => {
