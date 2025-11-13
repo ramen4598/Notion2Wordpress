@@ -1,5 +1,7 @@
 # Notion to WordPress
 
+![Notion to WordPress Logo](./docs/img/notion2wp_logo.png)
+
 An automated synchronization system that syncs Notion pages to WordPress blog as draft posts. Simply write your content in Notion and automatically publish it as a WordPress draft.
 
 ## 📋 Key Features
@@ -21,6 +23,8 @@ An automated synchronization system that syncs Notion pages to WordPress blog as
 5. Review the draft in WordPress admin panel and manually publish
 
 ## 📊 Status Property Values
+
+![status property values image](./docs/img/notion_database_example.png)
 
 - `writing`: Work in progress (ignored by sync)
 - `adding`: Waiting for sync (will be sent to WordPress)

@@ -143,6 +143,8 @@ SYNC_SCHEDULE="0 9 * * 1"
 
 ### Notion Datasource ID
 
+![status property values image](./img/notion_database_example.png)
+![notion datasource id image](./img/notion_datasource_id.png)
 1. Create a database in Notion
 2. Add a status property with the name matching `NOTION_PAGE_PROPERTY_NAME` in `.env` (default: `status`)
 3. Configure the status property with these options:
