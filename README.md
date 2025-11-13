@@ -72,6 +72,7 @@ src/
 
 - [Specification](./docs/spec.md) - Complete feature and technical specifications
 - [Quick Start Guide](./docs/quickstart.md) - Detailed setup instructions and examples
+- [Sequence Diagrams](./docs/diagrams/) - Sync orchestration flow diagrams
 - [Contracts](./docs/contracts/) - API interface definitions
 
 ## ⚠️ Limitations (MVP)
