@@ -36,7 +36,7 @@ An automated synchronization system that syncs Notion pages to WordPress blog as
 ## 🚀 Quick Start
 
 👇 Please refer to the quickstart guide: 
-[Quick Start Guide](./docs/quickstart.md)
+- [Quick Start Guide](./docs/quickstart.md)
 
 
 ## 🏗️ Tech Stack
