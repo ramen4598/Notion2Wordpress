@@ -6,6 +6,7 @@
 ## Overview
 
 This guide provides a quick reference for setting up and running the Notion-WordPress sync system. It covers environment setup, configuration, deployment, and basic operations.
+<br><br>
 
 ## Table of Contents
 1. [Prerequisites](#prerequisites)
@@ -20,9 +21,8 @@ This guide provides a quick reference for setting up and running the Notion-Word
 10. [FAQ](#faq)
 11. [Security Best Practices](#security-best-practices)
 12. [Support](#support)
-
 ---
-
+<br><br>
 ## Prerequisites
 
 - **Node.js**: Version 20.x LTS or higher
@@ -41,7 +41,7 @@ This guide provides a quick reference for setting up and running the Notion-Word
   - Bot must be started by user or added to channel
 
 ---
-
+<br><br>
 ## Setup Steps
 
 ### 1. Clone Repository
@@ -71,7 +71,7 @@ Installed versions:
 - `vitest`: 4.0.8
 - `eslint`: 9.38.1
 - `prettier`: 3.6.2
-
+<br><br>
 ### 3. Configure Environment Variables
 
 Create a `.env` file in the project root:
@@ -124,7 +124,7 @@ SYNC_SCHEDULE="0 9 * * 1"
 ```
 
 ---
-
+<br><br>
 ## Obtaining Credentials
 
 ### Notion Integration Token
@@ -161,7 +161,7 @@ SYNC_SCHEDULE="0 9 * * 1"
 7. Paste this ID into `NOTION_DATASOURCE_ID` in your `.env` file
 
 **Note**: The database must be shared with your Notion integration for the sync to work.
-
+<br><br>
 ### WordPress Application Password
 
 1. Log in to WordPress admin panel
@@ -172,14 +172,14 @@ SYNC_SCHEDULE="0 9 * * 1"
 6. Copy the generated password (format: `xxxx xxxx xxxx xxxx`)
 
 **Note**: Your WordPress user must have "Author" or "Editor" role.
-
+<br><br>
 ### Telegram Bot Token
 
 1. Open Telegram and search for `@BotFather`
 2. Send `/newbot` command
 3. Follow prompts to name your bot
 4. Copy the bot token (format: `1234567890:ABCdef...`)
-
+<br><br>
 ### Telegram Chat ID
 
 **For personal chat**:
@@ -192,7 +192,7 @@ SYNC_SCHEDULE="0 9 * * 1"
 2. Use channel username: `@your_channel` or numeric ID
 
 ---
-
+<br><br>
 ## Database Setup
 
 The SQLite database is auto-created on first run. To manually initialize:
@@ -204,7 +204,7 @@ npm run db:init
 This creates `./data/sync.db` with the schema defined in `config/schema.sql`.
 
 ---
-
+<br><br>
 ## Running the Sync Service
 
 ### Local Development
@@ -264,7 +264,7 @@ docker-compose logs -f
 ```
 
 ---
-
+<br><br>
 ## Usage
 
 ### Notion Workflow
@@ -308,7 +308,7 @@ docker exec notion2wp npm run sync:manual
 ```
 
 ---
-
+<br><br>
 ## Troubleshooting
 
 ### Common Issues
@@ -384,7 +384,7 @@ docker-compose logs -f
 6. Clean up: Delete WP post, set Notion status to `"writing"`
 
 ---
-
+<br><br>
 ## Monitoring
 
 ### Health Checks
@@ -401,7 +401,7 @@ sqlite3 ./data/sync.db "SELECT started_at, status FROM sync_jobs ORDER BY starte
 timezone: UTC
 
 ---
-
+<br><br>
 ## Maintenance
 
 ### Transport Security
@@ -430,7 +430,7 @@ sqlite3 ./data/sync.db "DELETE FROM sync_jobs WHERE started_at < datetime('now',
 ```
 
 ---
-
+<br><br>
 ## FAQ
 
 **Q: Can I sync multiple Notion datasources?**  
@@ -449,7 +449,7 @@ A: No. This project depends on `notion-to-md` for conversion.
 A: Stop the Docker container: `docker-compose stop`. Restart when ready.
 
 ---
-
+<br><br>
 ## Security Best Practices
 
 - Never commit `.env` file to version control
@@ -459,7 +459,7 @@ A: Stop the Docker container: `docker-compose stop`. Restart when ready.
 - Backup database before major updates
 
 ---
-
+<br><br>
 ## Support
 
 - **Issues**: Report bugs via GitHub Issues

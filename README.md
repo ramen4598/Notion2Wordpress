@@ -1,6 +1,8 @@
 # Notion to WordPress
 
-![Notion to WordPress Logo](./docs/img/notion2wp_logo.png)
+<p align="center">
+  <img src="./docs/img/notion2wp_logo.png" alt="Notion to WordPress Logo" width="400">
+</p>
 
 An automated synchronization system that syncs Notion pages to WordPress blog as draft posts. Simply write your content in Notion and automatically publish it as a WordPress draft.
 
