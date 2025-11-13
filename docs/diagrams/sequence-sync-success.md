@@ -52,6 +52,6 @@ sequenceDiagram
     Orchestrator->>DB: updateSyncJob(status=Completed, metrics)
     Orchestrator->>Telegram: sendSyncNotification(summary)
     Orchestrator-->>ENTRY: ExecuteSyncJobResponse
-
+```
 
 [Failed Sync Sequence](./sequence-sync-failure.md)
