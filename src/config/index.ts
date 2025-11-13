@@ -24,7 +24,6 @@ export interface Config {
   wpApiUrl: string;
   wpUsername: string;
   wpAppPassword: string;
-  wpVerifySsl: boolean; // Whether to verify SSL certificates when connecting to WordPress
 
   // Telegram
   telegramEnabled: boolean;
@@ -92,7 +91,6 @@ export const config: Config = {
   wpApiUrl: getEnv('WP_API_URL'),
   wpUsername: getEnv('WP_USERNAME'),
   wpAppPassword: getEnv('WP_APP_PASSWORD'),
-  wpVerifySsl: getEnvBoolean('WP_VERIFY_SSL', true),
 
   // Telegram
   telegramEnabled: getEnvBoolean('TELEGRAM_ENABLED', false),
