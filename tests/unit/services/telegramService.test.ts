@@ -3,5 +3,5 @@
 import { describe, it, expect } from 'vitest';
 
 describe('TelegramService', () => {
-    // TODO: Add test cases
+    // : Add test cases
 });

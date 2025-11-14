@@ -3,5 +3,5 @@
 import { describe, it, expect } from 'vitest';
 
 describe('syncManual CLI', () => {
-  // TODO: Add test cases
+  // : Add test cases
 });
