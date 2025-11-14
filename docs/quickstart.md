@@ -1130,9 +1130,9 @@ TELEGRAM_ENABLED=false
 
 To pin to a specific version instead of `latest`:
 
-**Docker Compose** - Edit `docker-compose.yml`:
-```yaml
-image: ghcr.io/ramen4598/notion2wordpress:v1.0.0
+**.env** - Edit `.env`:
+```
+N2W_VERSION=1.0.0
 ```
 
 **Docker Run:**
