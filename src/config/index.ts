@@ -103,7 +103,7 @@ export const config: Config = {
 
   // Database
   databasePath: getEnv('DATABASE_PATH', DEFAULT_DATABASE_PATH),
-  logLevel: getEnv('LOG_LEVEL', 'info'),
+  logLevel: getEnv('LOG_LEVEL', 'warn'),
 
   // Image Download
   maxConcurrentImageDownloads: getEnvNumber('MAX_CONCURRENT_IMAGE_DOWNLOADS', 3),
