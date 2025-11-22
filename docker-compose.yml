@@ -1,11 +1,6 @@
-version: '3.8'
-
-name: notion2wp
-
 services:
   notion2wp:
-    container_name: notion2wp
-    image: ghcr.io/ramen4598/notion2wp:${N2W_VERSION:-latest}
+    image: ghcr.io/ramen4598/notion2wordpress:${N2W_VERSION:-latest}
     # build:
     #   context: .
     #   dockerfile: Dockerfile
