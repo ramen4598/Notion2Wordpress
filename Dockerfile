@@ -10,6 +10,9 @@ WORKDIR /app
 COPY package*.json ./
 COPY tsconfig.json ./
 
+# Copy config (includes schema.sql) so it can be passed to final image
+COPY config ./config
+
 # Install dependencies
 RUN npm install --production=false
 
@@ -36,6 +39,7 @@ COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/config ./config
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data
