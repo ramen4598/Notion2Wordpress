@@ -47,12 +47,6 @@ RUN mkdir -p /app/data
 # Set environment
 ENV NODE_ENV=production
 
-# Run as non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001 && \
-    chown -R nodejs:nodejs /app
-USER nodejs
-
 # Expose health check port (optional)
 EXPOSE 3000
 
