@@ -1,6 +1,6 @@
 {
   "name": "notion2wordpress",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Automated synchronization of Notion pages to WordPress as draft posts",
   "main": "dist/index.js",
   "type": "module",

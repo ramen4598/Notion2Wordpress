@@ -48,7 +48,7 @@ RUN mkdir -p /app/data
 ENV NODE_ENV=production
 
 # Expose health check port (optional)
-EXPOSE 3000
+# EXPOSE 3000
 
 # Start the sync service
 CMD ["node", "dist/index.js"]
