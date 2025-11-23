@@ -2,7 +2,6 @@
 // for managing sync jobs, job items, image assets, and page-post mappings.
 
 import DatabaseConstructor, { type Database as BetterSqliteDatabase } from 'better-sqlite3';
-import { config } from '../config/index.js';
 import { logger } from '../lib/logger.js';
 import path from 'path';
 import fs from 'fs';
@@ -13,6 +12,7 @@ import { asError } from '../lib/utils.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_SCHEMA_PATH = path.resolve(__dirname, '../../config/schema.sql');
+const DEFAULT_DATABASE_PATH = path.resolve(__dirname, '../../data/sync.db');
 
 export interface SyncJob {
   id?: number;
@@ -62,7 +62,7 @@ class DatabaseService {
   private db: BetterSqliteDatabase | null = null;
 
   async initialize(): Promise<void> {
-    const dbPath = path.resolve(config.databasePath);
+    const dbPath = DEFAULT_DATABASE_PATH;
     const dbDir = path.dirname(dbPath);
 
     // Create data directory if it doesn't exist
@@ -83,7 +83,7 @@ class DatabaseService {
   }
 
   private async initSchema(): Promise<void> {
-    const schemaPath = path.resolve(__dirname, DEFAULT_SCHEMA_PATH);
+    const schemaPath = DEFAULT_SCHEMA_PATH;
     const schema = fs.readFileSync(schemaPath, 'utf-8');
 
     try {

@@ -1,6 +1,6 @@
 # Quickstart Guide: Notion to WordPress Sync for Developers
 
-**Date**: 2025-11-15  
+**Date**: 2025-11-23  
 **Version**: 1.0
 
 ## Overview
@@ -84,7 +84,7 @@ Edit `.env` with your credentials:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `NOTION_API_TOKEN` | ✅ | - | Notion integration token (format: `secret_...`) |
+| `NOTION_API_TOKEN` | ✅ | - | Notion integration token (format: `ntn_...`) |
 | `NOTION_DATASOURCE_ID` | ✅ | - | Target Notion datasource UUID (32 chars, no hyphens) |
 | `NOTION_PAGE_PROPERTY_NAME` | ❌ | `status` | Property name in Notion to track page status |
 | `WP_API_URL` | ✅ | - | WordPress REST API base URL (HTTPS for production) |
@@ -94,7 +94,6 @@ Edit `.env` with your credentials:
 | `TELEGRAM_BOT_TOKEN` | ✅* | - | Telegram bot token from @BotFather |
 | `TELEGRAM_CHAT_ID` | ✅* | - | Telegram chat/channel ID for notifications |
 | `SYNC_SCHEDULE` | ❌ | `*/5 * * * *` | Cron schedule expression (every 5 min) |
-| `DATABASE_PATH` | ❌ | `./data/sync.db` | SQLite database file path |
 | `LOG_LEVEL` | ❌ | `warn` | Logging level (debug/info/warn/error) |
 | `NODE_ENV` | ❌ | `development` | Environment (development/production) |
 | `MAX_CONCURRENT_IMAGE_DOWNLOADS` | ❌ | `3` | Maximum concurrent image downloads |
@@ -234,7 +233,6 @@ docker run -d \
   --name notion2wp \
   --env-file .env \
   -v $(pwd)/data:/app/data \
-  -v $(pwd)/.env:/app/.env:ro \
   --restart unless-stopped \
   notion2wp
 ```
@@ -246,7 +244,6 @@ docker run -d \
   --name notion2wp \
   --env-file .env \
   -v $(pwd)/data:/app/data \
-  -v $(pwd)/.env:/app/.env:ro \
   --restart unless-stopped \
   ghcr.io/ramen4598/notion2wordpress:latest
 ```
@@ -318,7 +315,7 @@ docker exec notion2wp npm run sync:manual
 **Cause**: Invalid `NOTION_API_TOKEN` or datasource not shared with integration
 
 **Solution**:
-- Verify token format: `secret_...` (50 characters)
+- Verify token format: `ntn_...` (50 characters)
 - Check datasource connection in Notion (Add connections → Select integration)
 
 ---
