@@ -61,7 +61,7 @@ class TelegramService {
       });
       logger.info(`Sent Telegram notification${append}`);
     } catch (error : unknown) {
-      logger.error(`Failed to send Telegram notification${append}`, asError(error).message);
+      logger.error(`Failed to send Telegram notification${append}`, asError(error));
       // Don't throw - notification failures shouldn't block the sync
     }
   }
