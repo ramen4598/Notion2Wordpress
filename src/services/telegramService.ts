@@ -3,6 +3,7 @@
 import { Telegraf } from 'telegraf';
 import { config } from '../config/index.js';
 import { logger } from '../lib/logger.js';
+import { retryWithBackoff } from '../lib/retry.js';
 import { SyncJob } from '../orchestrator/syncOrchestrator.js';
 import { JobStatus } from '../enums/db.enums.js';
 import { asError } from '../lib/utils.js';
@@ -39,8 +40,8 @@ class TelegramService {
 
   /**
    * Sends a Telegram notification about the sync job status.
-   * @param msg SyncJob or string message to send.
-   * @throws Will not throw - notification failures shouldn't block the sync.
+   * Retries on failure with exponential backoff.
+   * @param msg The message or sync job details to send.
    */
   async sendSyncNotification(msg: Message): Promise<void> {
     if (!this.checkConfigured()) return;
@@ -54,11 +55,15 @@ class TelegramService {
       formedMsg = this.formatTextMessage(msg);
     }
 
+    const onRetryFn = (error: Error, attempt: number) => {
+      logger.warn(`Retrying Telegram notification (attempt ${attempt})`, error);
+    };
+
     try {
-      await this.bot!.telegram.sendMessage(this.chatId!, formedMsg, {
+      await retryWithBackoff(async () => await this.bot!.telegram.sendMessage(this.chatId!, formedMsg, {
         parse_mode: 'Markdown',
         link_preview_options: { is_disabled: true },
-      });
+      }), { onRetry: onRetryFn });
       logger.info(`Sent Telegram notification${append}`);
     } catch (error : unknown) {
       logger.error(`Failed to send Telegram notification${append}`, asError(error));
