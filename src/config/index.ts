@@ -8,7 +8,6 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_ENV_PATH = '../../.env';
-const DEFAULT_DATABASE_PATH = './data/sync.db';
 
 // Load environment variables
 // from .env file to the process.env object
@@ -34,9 +33,6 @@ export interface Config {
   syncSchedule: string; // Cron expression for sync schedule
   nodeEnv: string;
 
-  // Database
-  databasePath: string;
-  
   // Logging
   logLevel: string;
 
@@ -101,8 +97,7 @@ export const config: Config = {
   syncSchedule: getEnv('SYNC_SCHEDULE', '*/5 * * * *'), // Default: every 5 minutes
   nodeEnv: getEnv('NODE_ENV', 'development'),
 
-  // Database
-  databasePath: getEnv('DATABASE_PATH', DEFAULT_DATABASE_PATH),
+  // Logging
   logLevel: getEnv('LOG_LEVEL', 'warn'),
 
   // Image Download

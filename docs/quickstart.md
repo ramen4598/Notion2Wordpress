@@ -1,6 +1,6 @@
 # Quickstart Guide: Notion to WordPress Sync
 
-**Last Updated**: 2025-11-15  
+**Last Updated**: 2025-11-23  
 **Version**: 1.0
 
 ## Introduction
@@ -292,7 +292,6 @@ Create a file named `docker-compose.yml` in the same directory as your `.env` fi
 
 ```bash
 curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/ramen4598/Notion2Wordpress/refs/heads/main/docker-compose.yml
-mkdir -p data
 ```
 
 Or copy and paste this [template](../docker-compose.yml):
@@ -352,7 +351,6 @@ docker run -d \
   --restart unless-stopped \
   --env-file .env \
   -v "$(pwd)/data:/app/data" \
-  -v "$(pwd)/.env:/app/.env:ro" \
   -e NODE_ENV=production \
   ghcr.io/ramen4598/notion2wordpress:latest
 ```
@@ -363,7 +361,6 @@ docker run -d \
 - `--restart unless-stopped` - Auto-restart if it crashes
 - `--env-file .env` - Load environment variables from .env file
 - `-v "$(pwd)/data:/app/data"` - Mount data directory (for database)
-- `-v "$(pwd)/.env:/app/.env:ro"` - Mount .env file (read-only)
 - `-e NODE_ENV=production` - Set production mode
 - `ghcr.io/ramen4598/notion2wordpress:latest` - Use official pre-built image
 
@@ -474,7 +471,8 @@ To sync immediately without waiting for scheduled run:
 
 **Docker Compose:**
 ```bash
-docker compose exec notion2wp node dist/cli/syncManual.js
+docker ps // Find your container name
+docker compose exec Container_Name node dist/cli/syncManual.js
 ```
 
 **Docker Run:**
@@ -574,8 +572,7 @@ docker restart notion2wp
 **Causes & Solutions:**
 
 1. **Invalid NOTION_API_TOKEN**
-   - Token must start with `secret_`
-   - Token must be 50+ characters
+   - Token must start with `ntn`
    - **Solution**: Re-generate token at https://www.notion.so/my-integrations
 
 2. **Database not shared with integration** ⚠️ Most common issue!
@@ -998,12 +995,6 @@ rm .env
 These settings have sensible defaults but can be customized:
 
 ```bash
-# ============================================
-# Database Configuration
-# ============================================
-DATABASE_PATH=./data/sync.db
-# Where to store SQLite database file
-
 # ============================================
 # Logging Configuration  
 # ============================================
