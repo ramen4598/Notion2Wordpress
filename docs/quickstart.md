@@ -1,7 +1,7 @@
 # Quickstart Guide: Notion to WordPress Sync
 
 **Last Updated**: 2025-11-23  
-**Version**: 1.0
+**Version**: 1.1
 
 ## Introduction
 
