@@ -7,6 +7,9 @@ import { SyncJob } from '../orchestrator/syncOrchestrator.js';
 import { JobStatus } from '../enums/db.enums.js';
 import { asError } from '../lib/utils.js';
 
+
+export type Message = SyncJob | string;
+
 class TelegramService {
   private bot: Telegraf | null; // Telegram bot instance
   private chatId: string | null; // Telegram chat ID to send messages to
@@ -36,28 +39,51 @@ class TelegramService {
 
   /**
    * Sends a Telegram notification about the sync job status.
-   * @param syncJob The sync job details.
+   * @param msg SyncJob or string message to send.
    * @throws Will not throw - notification failures shouldn't block the sync.
    */
-  async sendSyncNotification(syncJob: SyncJob): Promise<void> {
+  async sendSyncNotification(msg: Message): Promise<void> {
     if (!this.checkConfigured()) return;
 
-    const { jobId, status } = syncJob;
-    const message = this.formatNotificationMessage(syncJob);
+    let formedMsg: string = '';
+    let append: string = '';
+    if (this.isSyncJob(msg)) {
+      formedMsg = this.formatSyncJobMessage(msg);
+      append += " for jobId: " + msg.jobId;
+    } else {
+      formedMsg = this.formatTextMessage(msg);
+    }
 
     try {
-      await this.bot!.telegram.sendMessage(this.chatId!, message, {
+      await this.bot!.telegram.sendMessage(this.chatId!, formedMsg, {
         parse_mode: 'Markdown',
         link_preview_options: { is_disabled: true },
       });
-      logger.info(`Sent Telegram notification for job ${jobId} : ${status}`);
+      logger.info(`Sent Telegram notification${append}`);
     } catch (error : unknown) {
-      logger.error('Failed to send Telegram notification', {
-        jobId,
-        error: asError(error),
-      });
+      logger.error(`Failed to send Telegram notification${append}`, asError(error).message);
       // Don't throw - notification failures shouldn't block the sync
     }
+  }
+
+  /**
+   * Type guard to discriminate SyncJob from string.
+   */
+  private isSyncJob(msg: Message): msg is SyncJob {
+    return typeof msg === 'object' && msg !== null &&
+      'jobId' in msg && 'status' in msg && 'jobType' in msg;
+  }
+
+  /**
+   * Formats the notification message based on the sync job details.
+   * @param text Normal text message.
+   * @returns Formatted message string.
+   */
+  private formatTextMessage(text: string): string {
+    let message = '⚠️ *Notification*\n\n';
+    message += this.truncateText(text) + '\n';
+    message += `*Check logs for full error details*`;
+    return message;
   }
 
   /**
@@ -65,7 +91,7 @@ class TelegramService {
    * @param syncJob The sync job details.
    * @returns Formatted message string.
    */
-  private formatNotificationMessage(syncJob: SyncJob): string {
+  private formatSyncJobMessage(syncJob: SyncJob): string {
     const { jobId, jobType, status, pagesProcessed, pagesSucceeded, pagesFailed, errors } =
       syncJob;
 
@@ -86,7 +112,7 @@ class TelegramService {
 
       for (const error of displayErrors) {
         message += `• ${error.pageTitle}\n`;
-        message += `  _${this.truncateError(error.errorMessage)}_\n`;
+        message += `  _${this.truncateText(error.errorMessage)}_\n`;
       }
 
       if (errors.length > maxErrors) {
@@ -105,9 +131,9 @@ class TelegramService {
    * @param maxLength Maximum length of the error message.
    * @returns Truncated error message string.
    */
-  private truncateError(error: string, maxLength: number = 100): string {
-    if (error.length <= maxLength) return error;
-    return error.substring(0, maxLength) + '...';
+  private truncateText(text: string, maxLength: number = 100): string {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
   }
   
   /**

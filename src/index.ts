@@ -23,6 +23,12 @@ async function main() {
       logger.info('Scheduled sync job triggered');
       try {
         const result = await syncOrchestrator.executeSyncJob(JobType.Scheduled);
+
+        if (!result) {
+          logger.info('No pages to sync for this scheduled job');
+          return;
+        }
+
         logger.info('Scheduled sync completed', {
           jobId: result.jobId,
           JobType: result.jobType,

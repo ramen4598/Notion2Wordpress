@@ -30,7 +30,7 @@ export type SyncJob = {
   pagesSucceeded: number;
   pagesFailed: number;
   errors: SyncError[]; // Errors for individual page sync failures
-}
+};
 
 /**
  * Sync job item representing the sync status of a single Notion page.
@@ -41,11 +41,17 @@ type SyncJobItem = {
   pageId: string;
   wpPostId: number | undefined;
   uploadedMediaIds: number[];
-}
-
-export type ExecuteSyncJobResponse = SyncJob & {
-  status: Exclude<JobStatus, JobStatus.Running>; // No longer running
 };
+
+/**
+ * Response type for executing a sync job.
+ * Returns the completed or failed SyncJob, or null if no pages to sync.
+ */
+export type ExecuteSyncJobResponse =
+  | (SyncJob & {
+      status: Exclude<JobStatus, JobStatus.Running>; // No longer running
+    })
+  | null;
 
 class SyncOrchestrator {
   // executeSyncJob -> syncPages -> syncPage -> syncImages -> syncImage
@@ -61,16 +67,13 @@ class SyncOrchestrator {
   async executeSyncJob(jobType: JobType): Promise<ExecuteSyncJobResponse> {
     logger.info(`Starting sync job: ${jobType}`);
 
+    const pages: NotionPage[] = await this.queryPages();
+
+    // if no pages to sync, return null
+    if (pages.length === 0) return null;
+
     const syncJob: SyncJob = await this.createSyncJob(jobType);
-
     try {
-      // Query Notion for pages to sync
-      const lastSyncTimestamp = await db.getLastSyncTimestamp();
-      const pages = await notionService.queryPages({
-        lastSyncTimestamp: lastSyncTimestamp || undefined,
-        statusFilter: NPStatus.Adding,
-      });
-
       // Sync pages
       await this.syncPages(syncJob, pages);
 
@@ -81,7 +84,7 @@ class SyncOrchestrator {
         last_sync_timestamp: new Date().toISOString(),
       });
 
-      await this.sendTelegramNotification(syncJob);
+      await telegramService.sendSyncNotification(syncJob);
 
       logger.info(`Sync job ${syncJob.jobId} completed`, {
         pagesProcessed: syncJob.pagesProcessed,
@@ -94,18 +97,20 @@ class SyncOrchestrator {
       // Handle sync job failure, not individual sync job item failures.
       const err = asError(error);
       syncJob.status = JobStatus.Failed;
-      syncJob.errors = [{
-        notionPageId: 'N/A',
-        pageTitle: 'Fatal Error',
-        errorMessage: err.message,
-      }];
+      syncJob.errors = [
+        {
+          notionPageId: 'N/A',
+          pageTitle: 'Fatal Error',
+          errorMessage: err.message,
+        },
+      ];
 
       await db.updateSyncJob(syncJob.jobId, {
         status: syncJob.status,
         error_message: err.message,
       });
 
-      await this.sendTelegramNotification(syncJob);
+      await telegramService.sendSyncNotification(syncJob);
 
       logger.error(`Sync job ${syncJob.jobId} failed with fatal error`, err);
       throw err;
@@ -116,11 +121,10 @@ class SyncOrchestrator {
    * Syncs a list of Notion pages.
    * Handle individual page sync failures without aborting the entire job
    * @param syncJob - The sync job context.
-   * @param pages - The list of Notion pages to sync. 
+   * @param pages - The list of Notion pages to sync.
    * @returns A promise that resolves when all pages have been processed.
    */
   private async syncPages(syncJob: SyncJob, pages: NotionPage[]): Promise<void> {
-
     logger.info(`Found ${pages.length} pages to sync`);
 
     for (const page of pages) {
@@ -162,11 +166,10 @@ class SyncOrchestrator {
    * @throws An error if the sync fails.
    */
   private async syncPage(jobId: number, page: NotionPage): Promise<void> {
-    const syncJobItem : SyncJobItem = await this.createSyncJobItem(jobId, page.id);
+    const syncJobItem: SyncJobItem = await this.createSyncJobItem(jobId, page.id);
     try {
-
       // Convert Notion page to HTML, Extract images, Replace image URLs with placeholders
-      const {html, images} = await notionService.getPageHTML(page.id);
+      const { html, images } = await notionService.getPageHTML(page.id);
 
       const imageMap = new Map<string, string>();
 
@@ -227,14 +230,20 @@ class SyncOrchestrator {
    * @returns A promise that resolves when all images have been processed.
    * @throws An aggregate error. Collect errors from individual image sync failures.
    */
-  private async syncImages(syncJobItem: SyncJobItem, imageMap: Map<string, string>, images: ImageReference[]): Promise<void> {
-    const results: PromiseSettledResult<void>[] = [];    
+  private async syncImages(
+    syncJobItem: SyncJobItem,
+    imageMap: Map<string, string>,
+    images: ImageReference[]
+  ): Promise<void> {
+    const results: PromiseSettledResult<void>[] = [];
     const maxConcurrent = config.maxConcurrentImageDownloads;
-    const errors : Error[] = [];
+    const errors: Error[] = [];
 
     // Process images in batches
-    for(let i = 0; i < images.length; i += maxConcurrent) {
-      logger.info(`Syncing images ${i + 1} to ${Math.min(i + maxConcurrent, images.length)} of ${images.length}`);
+    for (let i = 0; i < images.length; i += maxConcurrent) {
+      logger.info(
+        `Syncing images ${i + 1} to ${Math.min(i + maxConcurrent, images.length)} of ${images.length}`
+      );
       const batch = images.slice(i, i + maxConcurrent);
       const promises = batch.map((image) => this.syncImage(syncJobItem, imageMap, image));
       const batchResults = await Promise.allSettled(promises);
@@ -250,7 +259,7 @@ class SyncOrchestrator {
 
     // If any errors, throw aggregate error
     if (errors.length > 0) {
-      const message = errors.map(e => e.message).join('; ')
+      const message = errors.map((e) => e.message).join('; ');
       throw new Error(`Failed to sync ${errors.length} images : ${message}`);
     }
   }
@@ -263,7 +272,11 @@ class SyncOrchestrator {
    * @returns A promise that resolves when the image has been synced.
    * @throws An error if the image sync fails.
    */
-  private async syncImage(syncJobItem: SyncJobItem, imageMap: Map<string, string>, image: ImageReference): Promise<void> {
+  private async syncImage(
+    syncJobItem: SyncJobItem,
+    imageMap: Map<string, string>,
+    image: ImageReference
+  ): Promise<void> {
     const assetId = await db.createImageAsset({
       sync_job_item_id: syncJobItem.id,
       notion_page_id: syncJobItem.pageId,
@@ -274,7 +287,12 @@ class SyncOrchestrator {
 
     try {
       // Download image
-      const { filename: ogfname, buffer, hash, contentType } = await imageDownloader.download({
+      const {
+        filename: ogfname,
+        buffer,
+        hash,
+        contentType,
+      } = await imageDownloader.download({
         url: image.url,
       });
 
@@ -324,7 +342,7 @@ class SyncOrchestrator {
    * @param syncJobItem - The sync job item context.
    * @param errorMessage - The error message to record.
    */
-  private rollback( syncJobItem: SyncJobItem, errorMessage: string ): void {
+  private rollback(syncJobItem: SyncJobItem, errorMessage: string): void {
     // Fire-and-forget. if edit code, this can cause race conditions. Be careful.
     const { id: jobItemId, pageId: notionPageId, wpPostId, uploadedMediaIds } = syncJobItem;
     logger.warn(`Rolling back sync for page ${notionPageId}`);
@@ -360,6 +378,29 @@ class SyncOrchestrator {
   }
 
   /**
+   * Queries Notion for pages to sync based on last sync timestamp and status filter.
+   * @returns A promise that resolves to the list of Notion pages to sync.
+   * @throws An error if the query fails.
+   */
+  private async queryPages(): Promise<NotionPage[]> {
+    try {
+      // Query Notion for pages to sync
+      const lastSyncTimestamp = await db.getLastSyncTimestamp();
+      return await notionService.queryPages({
+        lastSyncTimestamp: lastSyncTimestamp || undefined,
+        statusFilter: NPStatus.Adding,
+      });
+    } catch (error: unknown) {
+      const err = asError(error);
+      logger.error('Failed to query Notion pages for sync job', err);
+      await telegramService.sendSyncNotification(
+        'Failed to query Notion pages for sync job: ' + err.message
+      );
+      throw err;
+    }
+  }
+
+  /**
    * Creates a new sync job record in the database.
    * @param jobType - The type of sync job.
    * @returns A promise that resolves to the created sync job.
@@ -390,8 +431,8 @@ class SyncOrchestrator {
    * @returns A promise that resolves to the created sync job item.
    * @throws An error if the sync job item creation fails.
    */
-  private async createSyncJobItem(jobId: number, pageId: string) : Promise<SyncJobItem> {
-    try{
+  private async createSyncJobItem(jobId: number, pageId: string): Promise<SyncJobItem> {
+    try {
       const jobItemId = await db.createSyncJobItem({
         sync_job_id: jobId,
         notion_page_id: pageId,
@@ -429,24 +470,6 @@ class SyncOrchestrator {
     };
 
     return extensions[contentType] || 'jpg';
-  }
-
-  /**
-   * Sends a Telegram notification about the sync job status.
-   * @param syncJob - The sync job context.
-   * @returns A promise that resolves when the notification has been sent.
-   * @throws Nothing. Errors are logged but not thrown.
-   */
-  private async sendTelegramNotification(syncJob: SyncJob): Promise<void> {
-    await telegramService.sendSyncNotification({
-      jobId: syncJob.jobId,
-      jobType: syncJob.jobType,
-      status: syncJob.status,
-      pagesProcessed: syncJob.pagesProcessed,
-      pagesSucceeded: syncJob.pagesSucceeded,
-      pagesFailed: syncJob.pagesFailed,
-      errors: syncJob.errors,
-    });
   }
 }
 
