@@ -728,10 +728,6 @@ curl -u "username:xxxx xxxx xxxx xxxx xxxx xxxx" \
    ls -la data/sync.db
    ```
    **Solution**: Ensure Docker can write to data directory:
-   ```bash
-   chmod 755 data
-   chmod 644 data/sync.db
-   ```
 
 ---
 
