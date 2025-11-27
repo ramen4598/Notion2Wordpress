@@ -86,6 +86,7 @@ class TelegramService {
    */
   private formatTextMessage(text: string): string {
     let message = '⚠️ *Notification*\n\n';
+    message += `*URL:* ${this.getDomain()}\n\n`;
     message += this.truncateText(text) + '\n';
     message += `*Check logs for full error details*`;
     return message;
@@ -104,6 +105,7 @@ class TelegramService {
     const statusText = status === JobStatus.Completed ? 'Completed' : 'Failed';
 
     let message = `${emoji} *Notion→WordPress Sync ${statusText}*\n\n`;
+    message += `*URL:* ${this.getDomain()}\n\n`;
     message += `*Job ID:* ${jobId}\n`;
     message += `*Type:* ${jobType}\n`;
     message += `*Pages Processed:* ${pagesProcessed}\n`;
@@ -128,6 +130,15 @@ class TelegramService {
     }
 
     return message;
+  }
+
+  /**   
+   * Extracts the domain from the WordPress API URL.
+   * @returns Domain string.
+   */
+  private getDomain(): string {
+    const url = new URL(config.wpApiUrl);
+    return url.hostname;
   }
 
   /**
